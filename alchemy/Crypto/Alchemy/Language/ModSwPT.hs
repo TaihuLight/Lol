@@ -21,4 +21,4 @@ class ModSwPT expr where
   -- output (so we can't use 'Ring').
   modSwitchDec :: (ModSwitchCtxPT expr d a zp', a ~ Cyc t m zp,
                    zp' ~ Z2E e i, zp ~ Z2E ('S e) i)
-               => expr d a -> expr d (Cyc t m zp')
+               => expr (hs :: [*]) d a -> expr hs d (Cyc t m zp')

@@ -1,8 +1,12 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Crypto.Alchemy.Language.Lam where
 
 import Crypto.Alchemy.Depth
+import Data.Singletons.Prelude.List
 
 -- | Lambda abstraction and application.
 
@@ -16,9 +20,9 @@ class Lambda expr where
 
 -- | Lambda abstraction and application for leveled computations.
 
-class LambdaD expr where
+class LambdaD expr (h :: [*]) where
   -- | Abstract.
-  lamD :: (expr da a -> expr db b) -> expr ('L da db) (a -> b)
+  lamD :: (expr '[] da a -> expr h db b) -> expr h ('L da db) (a -> b)
 
   -- | Apply.
-  appD :: expr ('L da db) (a -> b) -> expr da a -> expr db b
+  appD :: expr h' ('L da db) (a -> b) -> expr h da a -> expr (h :++ h') db b

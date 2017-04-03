@@ -20,7 +20,7 @@ import Crypto.Alchemy.Language.TunnelPT
 import Crypto.Lol
 
 -- | Metacircular evaluator with depth.
-newtype ID (d :: Depth) a = ID {unID :: a} deriving (Show, Eq, Functor)
+newtype ID (hs :: [*]) (d :: Depth) a = ID {unID :: a} deriving (Show, Eq, Functor)
 
 -- | Metacircular plaintext symantics.
 instance AddPT ID where
@@ -34,11 +34,11 @@ instance AddPT ID where
   addPublicPT a = fmap (a+)
   mulPublicPT a = fmap (a*)
 
-instance (Applicative mon) => MulPT mon ID where
+instance MulPT ID where
 
   type RingCtxPT ID d a = (Ring a)
 
-  (*#) = pure $ \a b -> ID $ unID a * unID b
+  a *# b = ID $ unID a * unID b
 
 instance ModSwPT ID where
 
@@ -46,17 +46,17 @@ instance ModSwPT ID where
 
   modSwitchDec = fmap rescaleDec
 
-instance (Applicative mon) => TunnelPT mon ID where
+instance TunnelPT ID where
 
   type TunnelCtxPT ID d t e r s zp = (e `Divides` r, e `Divides` s, CElt t zp)
 
-  tunnelPT = pure . fmap . evalLin
+  tunnelPT = fmap . evalLin
 
 -- | Metacircular lambda with depth.
-instance LambdaD ID where
+instance LambdaD ID h where
   lamD f   = ID $ unID . f . ID
   appD f a = ID $ unID f $ unID a
 
-instance Lit (ID d) where
-  type LitCtx (ID d) a = ()
+instance Lit (ID hs d) where
+  type LitCtx (ID hs d) a = ()
   lit = ID

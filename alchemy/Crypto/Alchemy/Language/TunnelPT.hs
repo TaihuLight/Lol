@@ -10,9 +10,10 @@ import GHC.Exts
 
 -- | Symantics for leveled plaintext operations of some depth @d@.
 
-class (Applicative mon) => TunnelPT mon expr where
+class TunnelPT expr where
 
   type TunnelCtxPT expr (d :: Depth) (t :: Factored -> * -> *) (e :: Factored) (r :: Factored) (s :: Factored) zp :: Constraint
 
+  -- EAC: Need to append Tunnel hint eventually
   tunnelPT :: (TunnelCtxPT expr d t e r s zp)
-           => Linear t zp e r s -> mon (expr d (Cyc t r zp) -> expr d (Cyc t s zp))
+           => Linear t zp e r s -> expr (h :: [*]) d (Cyc t r zp) -> expr h d (Cyc t s zp)
