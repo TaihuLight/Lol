@@ -43,20 +43,23 @@ import Data.Type.Natural
 litPT :: (Lit (ptexpr '[] d), LitCtx (ptexpr '[] d) a) => a -> ptexpr '[] d a
 litPT = lit
 
+
+
 {-
-(AddPT ptexpr, MulPT mon ptexpr, a ~ Cyc t m zp,
+(AddPT ptexpr, MulPT ptexpr, a ~ Cyc t m zp,
  AddPubCtxPT ptexpr d a, AdditiveCtxPT ptexpr (Add1 d) a,
- RingCtxPT ptexpr d a, Ring a, Applicative mon, LambdaD ptexpr)
+ RingCtxPT ptexpr d a, Ring a, LambdaD ptexpr)
 -}
-pt1 :: forall t m zp (d :: Depth) ptexpr . (_)
-  => ptexpr '[KSHintType ptexpr d (Cyc t m zp)] ('L (Add1 d) ('L (Add1 d) d)) (Cyc t m zp -> Cyc t m zp -> Cyc t m zp)
+pt1 :: forall t m zp d ptexpr . (_)
+  => ptexpr _ ('L (Add1 d) ('L (Add1 d) d)) (Cyc t m zp -> Cyc t m zp -> Cyc t m zp)
 pt1 = lamD $ \b -> lamD $ \a -> addPublicPT 2 $ a *# (a +# b)
 
 {-
-(AddPT ptexpr, MulPT mon ptexpr, a ~ Cyc t m zp,
+(AddPT ptexpr, MulPT ptexpr, a ~ Cyc t m zp,
  AddPubCtxPT ptexpr d a, AdditiveCtxPT ptexpr (Add1 d) a,
- RingCtxPT ptexpr d a, Ring a, Applicative mon, LambdaD ptexpr)
+ RingCtxPT ptexpr d a, Ring a, LambdaD ptexpr)
 -}
+
 pt2 :: forall t m zp d ptexpr . (_)
   => Cyc t m zp -> Cyc t m zp -> ptexpr '[KSHintType ptexpr d (Cyc t m zp)] d (Cyc t m zp)
 pt2 a b = appD (appD pt1 $ litPT a) $ litPT b
@@ -75,13 +78,20 @@ tunn1 _ = do
   return $ lamD $ \x -> tunnel2 $ tunnel1 x
 -}
 type Zq q = ZqBasic q Int64
-
+-- pt1 ∷ ∀ {zp} {m ∷ Factored} {t ∷ Factored → ★ → ★} {ptexpr ∷ [GHC.Types.*] → Depth → ★ → ★} {d ∷ Depth}
 main :: IO ()
 main = do
+-- EAC: There's a GHC bug here: GHC *can* infer the type of the signature (e.g., of pt1)
+-- when I make it infer the list of hints, but it's mangling the order of the
+-- forall'd variables, which is supposed to be sacred. Thus even though I've
+-- listed "t m zp d ptexpr" here, GHC apparently expects use sites to use the
+-- order "ptexpr d t m zp".
+--https://ghc.haskell.org/trac/ghc/ticket/13524
+
   -- print the unapplied PT function
-  putStrLn $ unSPT $ pt1 @CT @F4 @Int64 @('T 'Z)
+  putStrLn $ unSPT $ pt1 @ShowPT @('T 'Z) @CT @F4 @Int64  -- @CT @F4 @Int64 @('T 'Z)
   -- apply the PT function to arguments, then print it out
-  putStrLn $ unSPT $ pt2 @CT @F4 @Int64 7 11
+  putStrLn $ unSPT $ pt2 @CT @F4 @Int64 @('T 'Z) 7 11
   -- apply the PT function to arguments and evaluate the function
   putStrLn $ show $ unID $ pt2 @CT @F4 @Int64 7 11
   -- compile the un-applied function to CT, then print it out
@@ -92,8 +102,9 @@ main = do
          @TrivGad
          @Double
          1.0
-         (pt1 @CT @F4 @(Zq 7) @('T 'Z))
+         (pt1 @_ @('T 'Z) @CT @F4 @(Zq 7))
   putStrLn $ unSCT x
+
 {-
   -- example with rescale de-duplication when tunneling
   -- print the unapplied PT function
