@@ -57,6 +57,6 @@ instance LambdaD ID h where
   lamD f   = ID $ unID . f . ID
   appD f a = ID $ unID f $ unID a
 
-instance Lit (ID hs d) where
-  type LitCtx (ID hs d) a = ()
+instance Lit (ID '[] d) where
+  type LitCtx (ID '[] d) a = ()
   lit = ID

@@ -54,6 +54,6 @@ instance LambdaD ShowPT h where
     in "\\" ++ x ++ " -> " ++ (b $ i+1)
   appD (SPT f) (SPT a) = SPT $ \i -> "( " ++ f i ++ " ) " ++ a i
 
-instance Lit (ShowPT hs d) where
-  type LitCtx (ShowPT hs d) a = (Show a)
+instance Lit (ShowPT '[] d) where
+  type LitCtx (ShowPT '[] d) a = (Show a)
   lit a = SPT $ \_ -> show a

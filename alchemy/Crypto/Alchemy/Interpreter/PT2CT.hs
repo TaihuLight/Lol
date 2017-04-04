@@ -76,8 +76,6 @@ data PT2CT :: [(Factored,Factored)] -- map from plaintext index to ciphertext in
            -> *                     -- type contained in the expression
            -> * where
   P2C :: {runP2C :: ctexpr (CTType m'map zqs d a)} -> PT2CT m'map zqs zq'map gad v ctexpr '[] d a
-  --Gen :: {unHint :: (h -> PT2CT m'map zqs zq'map gad v ctexpr hs d a)}
-  --         -> PT2CT m'map zqs zq'map gad v ctexpr (h ': hs) d a
   Gen :: (GetHintCtx gad v t m' z zq') =>
     {unHint :: ((Proxy z,KSQuadCircHint gad (Cyc t m' zq')) -> PT2CT m'map zqs zq'map gad v ctexpr hs d a)}
            -> PT2CT m'map zqs zq'map gad v ctexpr ((Proxy z,KSQuadCircHint gad (Cyc t m' zq')) ': hs) d a
@@ -132,24 +130,19 @@ instance (SymCT ctexpr) => MulPT (PT2CT m'map zqs zq'map gad v ctexpr) where
     (RingCtxPT' ctexpr t m (Lookup m m'map) (LiftOf zp) zp (zqs !! d) (zqs !! (Add1 d)) zq'map gad v)
 
   type KSHintType (PT2CT m'map zqs zq'map gad v ctexpr) d (Cyc t m zp)
-    = KSQuadCircHint gad (Cyc t (Lookup m m'map) (Lookup (zqs !! (Add1 d)) zq'map))
+    = (Proxy (LiftOf zp), KSQuadCircHint gad (Cyc t (Lookup m m'map) (Lookup (zqs !! (Add1 d)) zq'map)))
 
   -- EAC: should key switch before the mul, only if necessary. Current signature of *# doesn't allow this...
-  (*#) :: forall rp t m zp zqid zq expr d h1 h2 m' .
-       (rp ~ Cyc t m zp, zqid ~ Add1 d, zq ~ (zqs !! zqid),
+  (*#) :: forall rp t m zp d' zq expr d h1 h2 m' .
+       (rp ~ Cyc t m zp, d' ~ Add1 d, zq ~ (zqs !! d'),
         expr ~ PT2CT m'map zqs zq'map gad v ctexpr, RingCtxPT expr d (Cyc t m zp),
         m' ~ Lookup m m'map)
-       => expr h1 zqid rp ->
-          expr h2 zqid rp ->
+       => expr h1 d' rp ->
+          expr h2 d' rp ->
           expr (h1 :++ h2 :++ '[(Proxy (LiftOf zp),KSQuadCircHint gad (Cyc t m' (Lookup zq zq'map)))]) d rp
   (P2C a) *# (P2C b)  = Gen $ \(_,h) -> P2C $ rescaleCT $ keySwitchQuadCT h $ a *^ b
   (Gen f) *# b = Gen $ \h -> f h *# b
   a@(P2C _) *# (Gen f) = Gen $ \h -> a *# f h
-
-{-
-hint :: KSQuadCircHint gad (Cyc t (Lookup m m'map) (Lookup zq zq'map)) <-
-      getKSHint (Proxy::Proxy zq'map) (Proxy::Proxy (LiftOf zp)) (Proxy::Proxy zq)
--}
 
 instance (SymCT ctexpr) => ModSwPT (PT2CT m'map zqs zq'map gad v ctexpr) where
   type ModSwitchCtxPT (PT2CT m'map zqs zq'map gad v ctexpr) d (Cyc t m zp) zp' =

@@ -14,7 +14,6 @@
 module Crypto.Alchemy.EDSL where
 
 import Control.Applicative
-import Control.Monad.Identity
 import Crypto.Alchemy.Depth
 import Crypto.Alchemy.Interpreter.Duplicate
 import Crypto.Alchemy.Language.CT ()
@@ -40,47 +39,51 @@ import Crypto.Lol.Types.ZPP -- EAC: I shouldn't need to explicitly import this..
 
 import Data.Type.Natural
 
+-- type restricted version of `lit` which forces no context on literals
+litPT :: (Lit (ptexpr '[] d), LitCtx (ptexpr '[] d) a) => a -> ptexpr '[] d a
+litPT = lit
 
 {-
 (AddPT ptexpr, MulPT mon ptexpr, a ~ Cyc t m zp,
  AddPubCtxPT ptexpr d a, AdditiveCtxPT ptexpr (Add1 d) a,
  RingCtxPT ptexpr d a, Ring a, Applicative mon, LambdaD ptexpr)
 -}
-pt1 :: forall t m zp d ptexpr mon . (_)
-  => mon (ptexpr ('L (Add1 d) ('L (Add1 d) d)) (Cyc t m zp -> Cyc t m zp -> Cyc t m zp))
-pt1 = (\(*$) -> lamD $ \b -> lamD $ \a -> addPublicPT 2 $ a *$ (a +# b)) <$> (*#)
+pt1 :: forall t m zp (d :: Depth) ptexpr . (_)
+  => ptexpr '[KSHintType ptexpr d (Cyc t m zp)] ('L (Add1 d) ('L (Add1 d) d)) (Cyc t m zp -> Cyc t m zp -> Cyc t m zp)
+pt1 = lamD $ \b -> lamD $ \a -> addPublicPT 2 $ a *# (a +# b)
 
 {-
 (AddPT ptexpr, MulPT mon ptexpr, a ~ Cyc t m zp,
  AddPubCtxPT ptexpr d a, AdditiveCtxPT ptexpr (Add1 d) a,
  RingCtxPT ptexpr d a, Ring a, Applicative mon, LambdaD ptexpr)
 -}
-pt2 :: forall t m zp d ptexpr mon . (_)
-  => Cyc t m zp -> Cyc t m zp -> mon (ptexpr d (Cyc t m zp))
-pt2 a b = (\f -> appD (appD f $ lit a) $ lit b) <$> pt1
+pt2 :: forall t m zp d ptexpr . (_)
+  => Cyc t m zp -> Cyc t m zp -> ptexpr '[KSHintType ptexpr d (Cyc t m zp)] d (Cyc t m zp)
+pt2 a b = appD (appD pt1 $ litPT a) $ litPT b
 
 {-
 (TunnelPTCtx' expr d mon t eru r u zp,
  TunnelPTCtx' expr d mon t eus u s zp,
  Monad mon, LambdaD expr)
 -}
+{-
 tunn1 :: forall t r u s zp d mon expr . (_)
-  => Proxy u -> mon (expr ('L d d) (Cyc t r zp -> Cyc t s zp))
+  => Proxy u -> mon (expr _ ('L d d) (Cyc t r zp -> Cyc t s zp))
 tunn1 _ = do
   tunnel1 <- tunnelPT' @u
   tunnel2 <- tunnelPT'
   return $ lamD $ \x -> tunnel2 $ tunnel1 x
-
+-}
 type Zq q = ZqBasic q Int64
 
 main :: IO ()
 main = do
   -- print the unapplied PT function
-  putStrLn $ unSPT $ runIdentity $ pt1 @CT @F4 @Int64 @('T 'Z)
+  putStrLn $ unSPT $ pt1 @CT @F4 @Int64 @('T 'Z)
   -- apply the PT function to arguments, then print it out
-  putStrLn $ unSPT $ runIdentity $ pt2 @CT @F4 @Int64 7 11
+  putStrLn $ unSPT $ pt2 @CT @F4 @Int64 7 11
   -- apply the PT function to arguments and evaluate the function
-  putStrLn $ show $ unID $ runIdentity $ pt2 @CT @F4 @Int64 7 11
+  putStrLn $ show $ unID $ pt2 @CT @F4 @Int64 7 11
   -- compile the un-applied function to CT, then print it out
   (x,_) <- compile
          @'[ '(F4, F8) ]
@@ -91,7 +94,7 @@ main = do
          1.0
          (pt1 @CT @F4 @(Zq 7) @('T 'Z))
   putStrLn $ unSCT x
-
+{-
   -- example with rescale de-duplication when tunneling
   -- print the unapplied PT function
   putStrLn $ unSPT $ runIdentity $ tunn1 @CT @H0 @H1 @H2 @(Zq PP8) @('T 'Z) Proxy
@@ -133,3 +136,4 @@ tunnelPT' =
       -- otherwise linearDec fails
       linf = linearDec (take dim crts) :: Linear t zp e r s
   in tunnelPT linf
+-}
