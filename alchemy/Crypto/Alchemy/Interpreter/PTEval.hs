@@ -9,7 +9,6 @@
 
 module Crypto.Alchemy.Interpreter.PTEval where
 
-import Control.Applicative
 import Crypto.Alchemy.Depth
 import Crypto.Alchemy.Language.AddPT
 import Crypto.Alchemy.Language.Lam
@@ -37,6 +36,7 @@ instance AddPT ID where
 instance MulPT ID where
 
   type RingCtxPT ID d a = (Ring a)
+  type KSHintType ID d a = ()
 
   a *# b = ID $ unID a * unID b
 
