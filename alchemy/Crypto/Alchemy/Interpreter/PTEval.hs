@@ -9,6 +9,7 @@
 
 module Crypto.Alchemy.Interpreter.PTEval where
 
+import Control.Applicative
 import Crypto.Alchemy.Depth
 import Crypto.Alchemy.Language.AddPT
 import Crypto.Alchemy.Language.Lam
@@ -46,11 +47,11 @@ instance ModSwPT ID where
 
   modSwitchDec = fmap rescaleDec
 
-instance TunnelPT ID where
+instance (Applicative mon) => TunnelPT mon ID where
 
   type TunnelCtxPT ID d t e r s zp = (e `Divides` r, e `Divides` s, CElt t zp)
 
-  tunnelPT = fmap . evalLin
+  tunnelPT f = pure $ fmap (evalLin f)
 
 -- | Metacircular lambda with depth.
 instance LambdaD ID h where

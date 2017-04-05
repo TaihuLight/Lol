@@ -13,7 +13,7 @@
 
 module Crypto.Alchemy.EDSL where
 
-import Control.Applicative
+import Control.Monad.Identity
 import Crypto.Alchemy.Depth
 import Crypto.Alchemy.Interpreter.Duplicate
 import Crypto.Alchemy.Language.CT ()
@@ -69,14 +69,14 @@ pt2 a b = appD (appD pt1 $ litPT a) $ litPT b
  TunnelPTCtx' expr d mon t eus u s zp,
  Monad mon, LambdaD expr)
 -}
-{-
+
 tunn1 :: forall t r u s zp d mon expr . (_)
   => Proxy u -> mon (expr _ ('L d d) (Cyc t r zp -> Cyc t s zp))
 tunn1 _ = do
   tunnel1 <- tunnelPT' @u
   tunnel2 <- tunnelPT'
   return $ lamD $ \x -> tunnel2 $ tunnel1 x
--}
+
 type Zq q = ZqBasic q Int64
 -- pt1 ∷ ∀ {zp} {m ∷ Factored} {t ∷ Factored → ★ → ★} {ptexpr ∷ [GHC.Types.*] → Depth → ★ → ★} {d ∷ Depth}
 main :: IO ()
@@ -102,10 +102,10 @@ main = do
          @TrivGad
          @Double
          1.0
-         (pt1 @_ @('T 'Z) @CT @F4 @(Zq 7))
+         (return $ pt1 @_ @('T 'Z) @CT @F4 @(Zq 7))
   putStrLn $ unSCT x
 
-{-
+
   -- example with rescale de-duplication when tunneling
   -- print the unapplied PT function
   putStrLn $ unSPT $ runIdentity $ tunn1 @CT @H0 @H1 @H2 @(Zq PP8) @('T 'Z) Proxy
@@ -136,8 +136,8 @@ type TunnelPTCtx' expr d mon t e r s zp =
    TunnelPT mon expr, TunnelCtxPT expr d t e r s zp, -- call to tunnelPT
    e `Divides` r, e `Divides` s, CElt t zp,          -- linearDec
    ZPP zp, TElt t (ZpOf zp))                         -- crtSet
-tunnelPT' :: forall s mon expr t r zp e d . (TunnelPTCtx' expr d mon t e r s zp)
-  => mon (expr d (Cyc t r zp) -> expr d (Cyc t s zp))
+tunnelPT' :: forall s mon expr t r zp e h d . (TunnelPTCtx' expr d mon t e r s zp)
+  => mon (expr h d (Cyc t r zp) -> expr h d (Cyc t s zp))
 tunnelPT' =
   let crts = proxy crtSet (Proxy::Proxy e)
       r = proxy totientFact (Proxy::Proxy r)
@@ -147,4 +147,3 @@ tunnelPT' =
       -- otherwise linearDec fails
       linf = linearDec (take dim crts) :: Linear t zp e r s
   in tunnelPT linf
--}

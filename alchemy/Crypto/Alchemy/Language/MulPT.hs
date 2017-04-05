@@ -6,7 +6,7 @@
 module Crypto.Alchemy.Language.MulPT where
 
 import Crypto.Alchemy.Depth
-import Crypto.Lol (Cyc, Proxy, LiftOf)
+import Crypto.Lol (Cyc)
 import Data.Singletons.Prelude.List
 import GHC.Exts
 

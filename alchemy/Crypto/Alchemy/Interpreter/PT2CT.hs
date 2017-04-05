@@ -36,11 +36,15 @@ import Crypto.Alchemy.Language.TunnelPT
 import Crypto.Lol hiding (Pos(..))
 import Crypto.Lol.Applications.SymmSHE hiding (tunnelCT, modSwitchPT)
 
+import Data.Constraint           hiding ((***), (&&&))
 import Data.Dynamic
 import Data.Maybe (mapMaybe)
 import Data.Type.Natural (Nat(..))
 import Data.Singletons.Prelude.List ((:++))
 import GHC.TypeLits hiding (type (*), Nat)-- for error message
+
+
+import Unsafe.Coerce
 
 -- singletons exports (:!!), which takes a TypeLit index; we need a TypeNatural index
 type family (xs :: [k1]) !! (d :: Depth) :: k1 where
@@ -76,27 +80,54 @@ data PT2CT :: [(Factored,Factored)] -- map from plaintext index to ciphertext in
            -> *                     -- type contained in the expression
            -> * where
   P2C :: {runP2C :: ctexpr (CTType m'map zqs d a)} -> PT2CT m'map zqs zq'map gad v ctexpr '[] d a
-  Gen :: (GetHintCtx gad v t m' z zq') =>
-    {unHint :: ((Proxy z,KSQuadCircHint gad (Cyc t m' zq')) -> PT2CT m'map zqs zq'map gad v ctexpr hs d a)}
-           -> PT2CT m'map zqs zq'map gad v ctexpr ((Proxy z,KSQuadCircHint gad (Cyc t m' zq')) ': hs) d a
+  GenKSH :: (GetKSHintCtx gad v t m' z zq') =>
+    Proxy z
+    -> (KSHintDummy gad v t m' z zq' -> PT2CT m'map zqs zq'map gad v ctexpr hs d a)
+    -> PT2CT m'map zqs zq'map gad v ctexpr ((KSHintDummy gad v t m' z zq') ': hs) d a
+  {-GenTH :: (GetTunnHintCtx t e r s e' r' s' z zp zq gad v) =>
+    Proxy z
+    -> Linear t zp e r s
+    -> (TunnelInfo gad t e r s e' r' s' zp zq -> PT2CT m'map zqs zq'map gad v ctexpr hs d a)
+    -> PT2CT m'map zqs zq'map gad v ctexpr ((TunnelInfo gad t e r s e' r' s' zp zq) ': hs) d a-}
 
-p2cmap :: (ctexpr (CTType m'map zqs d a) -> ctexpr (CTType m'map zqs d' b))
-           -> PT2CT m'map zqs zq'map gad v ctexpr h d a
-           -> PT2CT m'map zqs zq'map gad v ctexpr h d' b
-p2cmap f (P2C a) = P2C $ f a
-p2cmap f (Gen g) = Gen $ \h -> p2cmap f $ g h
 
+data KSHintDummy gad v t m' z zq' = KSH (KSQuadCircHint gad (Cyc t m' zq'))
 
 -- explicit forall for type application
+compile' :: forall m'map zqs zq'map gad v ctexpr d a rnd mon h .
+  (MonadRandom rnd, mon ~ ReaderT v (StateT ([Dynamic],[Dynamic]) rnd))
+  => PT2CT m'map zqs zq'map gad v ctexpr h d a -> mon (ctexpr (CTType m'map zqs d a))
+compile' (P2C b) = return b
+compile' (GenKSH z b) = do
+          hint <- getKSHint z
+          compile' $ b $ KSH hint
+
 compile :: forall m'map zqs zq'map gad v ctexpr d a rnd mon h .
   (MonadRandom rnd, mon ~ ReaderT v (StateT ([Dynamic],[Dynamic]) rnd))
-  => v -> PT2CT m'map zqs zq'map gad v ctexpr h d a -> rnd (ctexpr (CTType m'map zqs d a), ([Dynamic],[Dynamic]))
-compile v a = flip runStateT ([],[]) $ flip runReaderT v $ go a
-  where go :: PT2CT m'map zqs zq'map gad v ctexpr h' d a -> mon (ctexpr (CTType m'map zqs d a))
-        go (P2C b) = return b
-        go (Gen (b :: (Proxy z,_) -> _)) = do
-          hint <- getKSHint (Proxy :: Proxy z)
-          go $ b (Proxy,hint)
+  => v -> mon (PT2CT m'map zqs zq'map gad v ctexpr h d a) -> rnd (ctexpr (CTType m'map zqs d a), ([Dynamic],[Dynamic]))
+compile v a =
+  flip runStateT ([],[]) $ flip runReaderT v $ do
+    a' <- a
+    compile' a'
+
+-- this function prevents explosions of cases in binary operators with multiple GADT constructors
+push :: PT2CT m'map zqs zq'map gad v ctexpr h1 d1 a
+        -> (ctexpr (CTType m'map zqs d1 a) -> PT2CT m'map zqs zq'map gad v ctexpr h2 d2 b)
+        -> PT2CT m'map zqs zq'map gad v ctexpr (h1 :++ h2) d2 b
+push (P2C a) f = f a
+push (GenKSH z g) f = GenKSH z $ \h -> push (g h) f
+--push (GenTH z g h) f = GenTH z g $ \i -> push (h i) f
+
+p2cmap :: (ctexpr (CTType m'map zqs d a) -> ctexpr (CTType m'map zqs d' b))
+  -> PT2CT m'map zqs zq'map gad v ctexpr h d a
+  -> PT2CT m'map zqs zq'map gad v ctexpr h d' b
+p2cmap f a = push a (P2C . f) \\ appEmpty a
+
+-- convinces the compiler that (h ++ '[] ~ h)
+-- a possible solution is to be able to prepend to type lists rather than post-pend
+-- I haven't figured out how to make that work yet.
+appEmpty :: forall f h d a . f h d a -> (() :- (h ~ (h :++ '[])))
+appEmpty _ = Sub $ unsafeCoerce (Dict :: Dict ())
 
 ---- Language instances
 
@@ -109,9 +140,18 @@ instance (SymCT ctexpr) => AddPT (PT2CT m'map zqs zq'map gad v ctexpr) where
   type AdditiveCtxPT (PT2CT m'map zqs zq'map gad v ctexpr) d (Cyc t m zp) =
     (AdditiveCtxCT ctexpr (CT m zp (Cyc t (Lookup m m'map) (zqs !! d))))
 
+{-
+-- EAC: this suffices, but it's not pretty.
+-- On the other hand, GHC can tell the output list matches,
+-- so I don't need the (unsafeCoerce) entailment
   (P2C a) +# (P2C b) = P2C $ a +^ b
-  (Gen f) +# b = Gen $ \h -> f h +# b
-  a@(P2C _) +# (Gen f) = Gen $ \h -> a +# f h
+  (GenKSH z f) +# b = GenKSH z $ \h -> f h +# b
+  (GenTH z f a) +# b = GenTH z f $ (\h -> a h +# b)
+  a@(P2C _) +# (GenKSH z f) = GenKSH z $ \h -> a +# f h
+  a@(P2C _) +# (GenTH z f b) = GenTH z f $ \h -> a +# b h
+-}
+  a +# b = (push a $ \a' -> push b $ \b' ->
+    P2C $ a' +^ b') \\ appEmpty b
   negPT = p2cmap negCT
   addPublicPT = p2cmap . addPublicCT
   mulPublicPT = p2cmap . mulPublicCT
@@ -130,26 +170,24 @@ instance (SymCT ctexpr) => MulPT (PT2CT m'map zqs zq'map gad v ctexpr) where
     (RingCtxPT' ctexpr t m (Lookup m m'map) (LiftOf zp) zp (zqs !! d) (zqs !! (Add1 d)) zq'map gad v)
 
   type KSHintType (PT2CT m'map zqs zq'map gad v ctexpr) d (Cyc t m zp)
-    = (Proxy (LiftOf zp), KSQuadCircHint gad (Cyc t (Lookup m m'map) (Lookup (zqs !! (Add1 d)) zq'map)))
+    = KSHintDummy gad v t (Lookup m m'map) (LiftOf zp) (Lookup (zqs !! (Add1 d)) zq'map)
 
   -- EAC: should key switch before the mul, only if necessary. Current signature of *# doesn't allow this...
   (*#) :: forall rp t m zp d' zq expr d h1 h2 m' .
-       (rp ~ Cyc t m zp, d' ~ Add1 d, zq ~ (zqs !! d'),
-        expr ~ PT2CT m'map zqs zq'map gad v ctexpr, RingCtxPT expr d (Cyc t m zp),
-        m' ~ Lookup m m'map)
-       => expr h1 d' rp ->
-          expr h2 d' rp ->
-          expr (h1 :++ h2 :++ '[(Proxy (LiftOf zp),KSQuadCircHint gad (Cyc t m' (Lookup zq zq'map)))]) d rp
-  (P2C a) *# (P2C b)  = Gen $ \(_,h) -> P2C $ rescaleCT $ keySwitchQuadCT h $ a *^ b
-  (Gen f) *# b = Gen $ \h -> f h *# b
-  a@(P2C _) *# (Gen f) = Gen $ \h -> a *# f h
+       (rp ~ Cyc t m zp, d' ~ Add1 d, zq ~ (zqs !! d'), m' ~ Lookup m m'map,
+        expr ~ PT2CT m'map zqs zq'map gad v ctexpr, RingCtxPT expr d (Cyc t m zp))
+       => expr h1 d' rp -> expr h2 d' rp ->
+          expr (h1 :++ h2 :++ '[KSHintDummy gad v t m' (LiftOf zp) (Lookup (zqs !! (Add1 d)) zq'map)]) d rp
+  a *# b = (push a $ \a' -> push b $ \b' ->
+    -- EAC: the fact that I need a signature here seems like a bug.
+    GenKSH Proxy $ \(KSH h :: KSHintDummy gad v t m' (LiftOf zp) (Lookup zq zq'map)) -> P2C $ rescaleCT $ keySwitchQuadCT h $ a' *^ b') \\ appEmpty b
 
 instance (SymCT ctexpr) => ModSwPT (PT2CT m'map zqs zq'map gad v ctexpr) where
   type ModSwitchCtxPT (PT2CT m'map zqs zq'map gad v ctexpr) d (Cyc t m zp) zp' =
     (ModSwitchCtxCT ctexpr (CT m zp (Cyc t (Lookup m m'map) (zqs !! d))) zp')
 
   modSwitchDec = p2cmap modSwitchPT
-{-
+
 type TunnelCtxPT' ctexpr t e r s r' s' z zp zq zq' gad v =
   (TunnelCtxCT ctexpr t e r s (e * (r' / r)) r' s'   zp zq' gad,
    GenTunnelInfoCtx   t e r s (e * (r' / r)) r' s' z zp zq' gad,
@@ -162,27 +200,60 @@ instance (SymCT ctexpr, MonadRandom mon, MonadReader v mon, MonadState ([Dynamic
   type TunnelCtxPT (PT2CT m'map zqs zq'map gad v ctexpr) d t e r s zp =
     (TunnelCtxPT' ctexpr t e r s (Lookup r m'map) (Lookup s m'map) (LiftOf zp) zp (zqs !! d) (zqs !! (Add1 d)) gad v)
 
-  tunnelPT :: forall d t e r s zp .
+  tunnelPT :: forall d t e r s zp h .
     (TunnelCtxPT (PT2CT m'map zqs zq'map gad v ctexpr) d t e r s zp)
-    => Linear t zp e r s -> mon (PT2CT m'map zqs zq'map gad v ctexpr d (Cyc t r zp)
-                                 -> PT2CT m'map zqs zq'map gad v ctexpr d (Cyc t s zp))
+    => Linear t zp e r s -> mon (PT2CT m'map zqs zq'map gad v ctexpr h d (Cyc t r zp)
+                                 -> PT2CT m'map zqs zq'map gad v ctexpr h d (Cyc t s zp))
   tunnelPT f = do
-    thint <- genTunnHint @gad @(zqs !! (Add1 d)) f
+    thint <- genTunnHint @gad @(LiftOf zp) @(zqs !! (Add1 d)) Proxy f
     return $ p2cmap (rescaleCT . tunnelCT thint . rescaleCT)
+{-
+instance (SymCT ctexpr)
+  => TunnelPT (PT2CT m'map zqs zq'map gad v ctexpr) where
+  type TunnelCtxPT (PT2CT m'map zqs zq'map gad v ctexpr) d t e r s zp =
+    (TunnelCtxPT' ctexpr t e r s (Lookup r m'map) (Lookup s m'map) (LiftOf zp) zp (zqs !! d) (zqs !! (Add1 d)) gad v)
+  type TunnHintType (PT2CT m'map zqs zq'map gad v ctexpr) d t e r s zp =
+    TunnelInfo gad t e r s (e * ((Lookup r m'map) / r)) (Lookup r m'map) (Lookup s m'map) zp (zqs !! (Add1 d))
+
+  tunnelPT :: forall d t e r s zp hs .
+    (TunnelCtxPT (PT2CT m'map zqs zq'map gad v ctexpr) d t e r s zp)
+    => Linear t zp e r s -> PT2CT m'map zqs zq'map gad v ctexpr hs d (Cyc t r zp)
+                                 -> PT2CT m'map zqs zq'map gad v ctexpr (hs :++ '[TunnHintType (PT2CT m'map zqs zq'map gad v ctexpr) d t e r s zp]) d (Cyc t s zp)
+  tunnelPT f a = (push a (\a' ->
+    -- EAC: the fact that I need a signature here seems like a bug.
+    GenTH Proxy f $ \(h :: TunnelInfo _ _ _ _ _ _ _ _ _ (zqs !! (Add1 d))) ->
+      P2C $ rescaleCT $ tunnelCT h $ rescaleCT a')) \\ appEmpty a
 -}
 instance (Lambda ctexpr) => LambdaD (PT2CT m'map zqs zq'map gad v ctexpr) '[] where
   lamD f = P2C $ lam $ runP2C . f . P2C
   appD (P2C f) a = p2cmap (app f) a
-  appD (Gen f) a = Gen $ \h -> appD (f h) a
+  appD (GenKSH z f) a = GenKSH z $ \h -> appD (f h) a
 
-instance (Lambda ctexpr, GetHintCtx gad v t m' z zq', LambdaD (PT2CT m'map zqs zq'map gad v ctexpr) hs)
-  => LambdaD (PT2CT m'map zqs zq'map gad v ctexpr) ((Proxy (z :: *),KSQuadCircHint gad (Cyc t m' zq')) ': hs) where
+-- EAC: this is terrible. I don't want multiple Lambda instances for different hint types
+instance (Lambda ctexpr, GetKSHintCtx gad v t m' z zq', LambdaD (PT2CT m'map zqs zq'map gad v ctexpr) hs)
+  => LambdaD (PT2CT m'map zqs zq'map gad v ctexpr) ((KSHintDummy gad v t m' z zq') ': hs) where
 
-  lamD f = Gen $ \h -> lamD $ \a ->
+  lamD f = GenKSH Proxy $ \h -> lamD $ \a ->
     case f a of
-      Gen b -> b h
-  appD f (Gen a) = Gen $ \h -> appD f (a h)
+      GenKSH _ b -> b h
+  appD f (GenKSH z a) = GenKSH z $ appD f . a
 
+{-
+(GetTunnHintCtx t e r s e' r' s' z zp zq gad v) =>
+    Proxy z
+    -> Linear t zp e r s
+    -> (TunnelInfo gad t e r s e' r' s' zp zq -> PT2CT m'map zqs zq'map gad v ctexpr hs d a)
+    -> PT2CT m'map zqs zq'map gad v ctexpr ((TunnelInfo gad t e r s e' r' s' zp zq) ': hs) d a
+
+instance (GetTunnHintCtx t e r s e' r' s' z zp zq gad v,
+          Lambda ctexpr, LambdaD (PT2CT m'map zqs zq'map gad v ctexpr) hs)
+  => LambdaD (PT2CT m'map zqs zq'map gad v ctexpr) ((TunnelInfo gad t e r s e' r' s' zp zq) ': hs) where
+
+  lamD f = GenTH Proxy g $ \h -> lamD $ \a ->
+    case f a of
+      GenTH _ g b -> b h
+  appD f (GenTH z g a) = GenTH z g $ appD f . a
+-}
 ---- Monad helper functions
 
 -- retrieve the scaled variance parameter from the Reader
@@ -198,21 +269,23 @@ getKey = keyLookup >>= \case
   -- generate a key with the variance stored in the Reader monad
   Nothing -> genSK =<< getSvar
 
--- not memoized right now, but could be if we also store the linear function as part of the lookup key
 -- EAC: https://ghc.haskell.org/trac/ghc/ticket/13490
-genTunnHint :: forall gad zq mon t e r s e' r' s' z zp v .
+type GetTunnHintCtx t e r s e' r' s' z zp zq gad v =
+  (GenSKCtx t r' z v, Typeable (Cyc t r' z),
+   GenSKCtx t s' z v, Typeable (Cyc t s' z),
+   GenTunnelInfoCtx t e r s e' r' s' z zp zq gad)
+
+-- not memoized right now, but could be if we also store the linear function as part of the lookup key
+genTunnHint :: forall gad z zq mon t e r s e' r' s' zp v .
   (MonadReader v mon, MonadState ([Dynamic], [Dynamic]) mon, MonadRandom mon,
-   GenSKCtx t r' z v, Typeable (Cyc t r' (LiftOf zp)),
-   GenSKCtx t s' z v, Typeable (Cyc t s' (LiftOf zp)),
-   GenTunnelInfoCtx t e r s e' r' s' z zp zq gad,
-   z ~ LiftOf zp)
-  => Linear t zp e r s -> mon (TunnelInfo gad t e r s e' r' s' zp zq)
-genTunnHint linf = do
+   GetTunnHintCtx t e r s e' r' s' z zp zq gad v)
+  => Proxy z -> Linear t zp e r s -> mon (TunnelInfo gad t e r s e' r' s' zp zq)
+genTunnHint _ linf = do
   skout <- getKey @z
   sk <- getKey @z
   tunnelInfo linf skout sk
 
-type GetHintCtx gad v t m' z zq' =
+type GetKSHintCtx gad v t m' z zq' =
   (GenSKCtx t m' z v, Typeable (Cyc t m' z),
    -- constraints for hintLookup
    Typeable (KSQuadCircHint gad (Cyc t m' zq')),
@@ -223,7 +296,7 @@ type GetHintCtx gad v t m' z zq' =
 getKSHint :: forall v mon t z gad m' zq' .
   (-- constraints for getKey
    MonadReader v mon, MonadState ([Dynamic], [Dynamic]) mon,
-   MonadRandom mon, GetHintCtx gad v t m' z zq')
+   MonadRandom mon, GetKSHintCtx gad v t m' z zq')
   => Proxy z -> mon (KSQuadCircHint gad (Cyc t m' zq'))
 getKSHint _ = hintLookup >>= \case
   (Just h) -> return h
