@@ -280,11 +280,8 @@ type KSHintCtx gad t m' z zq =
   (LWECtx t m' z zq, Reduce (DecompOf zq) zq, Gadget gad zq,
    NFElt zq, CElt t (DecompOf zq))
 
--- | Generate a hint that "encrypts" a value under a secret key, in
--- the sense required for key-switching.  The hint works for any
--- plaintext modulus, but must be applied on a ciphertext in MSD form.
--- The output is 'force'd, i.e., evaluating it to whnf will actually
--- cause it to be be evaluated to nf.
+
+{-
 ksHint :: (KSHintCtx gad t m' z zq, MonadRandom rnd)
           => SK (Cyc t m' z) -> Cyc t m' z
           -> rnd (Tagged gad [Polynomial (Cyc t m' zq)])
@@ -292,8 +289,24 @@ ksHint skout val = do -- rnd monad
   let valq = reduce val
       valgad = encode valq
   -- CJP: clunky, but that's what we get without a MonadTagged
-  samples <- DT.mapM (\as -> replicateM (length as) (lweSample skout)) valgad
+  samples <- DT.mapM (\as -> replicateM (length as) (lweSample skout)) (valgad :: Tagged gad [u])
   return $! force $ zipWith (+) <$> (map P.const <$> valgad) <*> samples
+-}
+
+-- | Generate a hint that "encrypts" a value under a secret key, in
+-- the sense required for key-switching.  The hint works for any
+-- plaintext modulus, but must be applied on a ciphertext in MSD form.
+-- The output is 'force'd, i.e., evaluating it to whnf will actually
+-- cause it to be be evaluated to nf.
+ksHint :: forall gad t m' z zq rnd . (KSHintCtx gad t m' z zq, MonadRandom rnd)
+          => SK (Cyc t m' z) -> rnd (Cyc t m' z -> Tagged gad [Polynomial (Cyc t m' zq)])
+ksHint skout = do -- rnd monad\
+  let len = length <$> (gadget :: Tagged gad [Cyc t m' zq])
+  samples <- sequence $ (flip replicateM (lweSample skout)) <$> len
+  return $! \val ->
+    let valq = reduce val
+        valgad = encode valq
+    in force $ zipWith (+) <$> (map P.const <$> valgad) <*> samples
 
 -- poor man's module multiplication for knapsack
 (*>>) :: (Ring r, Functor f) => r -> f r -> f r
@@ -328,9 +341,11 @@ newtype KSQuadCircHint gad r'q' = KSQHint (Tagged gad [Polynomial r'q']) derivin
 -- one under \( s_{\text{out}} \).
 ksLinearHint :: (KSHintCtx gad t m' z zq', MonadRandom rnd)
   => SK (Cyc t m' z) -- sout
-  -> SK (Cyc t m' z) -- sin
-  -> rnd (KSLinearHint gad (Cyc t m' zq'))
-ksLinearHint skout (SK _ sin) = KSLHint <$> ksHint skout sin
+  -> rnd (SK (Cyc t m' z) -- sin
+          -> KSLinearHint gad (Cyc t m' zq'))
+ksLinearHint skout = do
+  ksh <- ksHint skout
+  return $ \(SK _ sin)  -> KSLHint $ ksh sin
 
 -- | Switch a linear ciphertext using the supplied hint.
 keySwitchLinear :: (KeySwitchCtx gad t m' zp zq zq')
@@ -346,7 +361,9 @@ keySwitchLinear (KSLHint hint) ct =
 ksQuadCircHint :: (KSHintCtx gad t m' z zq', MonadRandom rnd)
   => SK (Cyc t m' z)
   -> rnd (KSQuadCircHint gad (Cyc t m' zq'))
-ksQuadCircHint sk@(SK _ s) = KSQHint <$> ksHint sk (s*s)
+ksQuadCircHint sk@(SK _ s) = do
+  ksh <- ksHint sk
+  return $ KSQHint $ ksh (s*s)
 
 -- | Switch a quadratic ciphertext (i.e., one with three components)
 -- to a linear one under the /same/ key using the supplied hint.
@@ -510,17 +527,19 @@ type GenTunnelInfoCtx t e r s e' r' s' z zp zq gad =
 -- | Generates auxilliary data needed to tunnel from \(\O_{r'}\) to \(\O_{s'}\).
 tunnelInfo :: forall gad t e r s e' r' s' z zp zq rnd .
   (MonadRandom rnd, GenTunnelInfoCtx t e r s e' r' s' z zp zq gad)
-  => Linear t zp e r s
-  -> SK (Cyc t s' z)
+  => SK (Cyc t s' z)
   -> SK (Cyc t r' z)
-  -> rnd (TunnelInfo gad t e r s e' r' s' zp zq)
-tunnelInfo f skout (SK _ sin) = -- generate hints
-  (let f' = extendLin $ lift f :: Linear t z e' r' s'
-       f'q = reduce f' :: Linear t zq e' r' s'
-       -- choice of basis here must match coeffs* basis below
-       ps = proxy powBasis (Proxy::Proxy e')
-       comps = (evalLin f' . (adviseCRT sin *)) <$> ps
-   in TInfo f'q <$> CM.mapM (ksHint skout) comps)
+  -> rnd (Linear t zp e r s -> TunnelInfo gad t e r s e' r' s' zp zq)
+tunnelInfo skout (SK _ sin) = (do -- generate hints
+  -- choice of basis here must match coeffs* basis below
+  let ps = proxy powBasis (Proxy::Proxy e')
+  kshs <- replicateM (length ps) (ksHint skout)
+  return $ \f ->
+    let f' = extendLin $ lift f :: Linear t z e' r' s'
+        f'q = reduce f' :: Linear t zq e' r' s'
+        comps = (evalLin f' . (adviseCRT sin *)) <$> ps
+        hints = zipWith ($) kshs comps
+    in TInfo f'q hints)
     \\ lcmDivides (Proxy::Proxy r) (Proxy::Proxy e')
 
 -- | Constraint synonym for ring tunneling.

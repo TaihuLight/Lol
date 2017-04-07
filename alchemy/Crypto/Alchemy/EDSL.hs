@@ -38,6 +38,7 @@ import Crypto.Lol.Cyclotomic.Tensor (TElt) -- EAC: I shouldn't need to explicitl
 import Crypto.Lol.Types.ZPP -- EAC: I shouldn't need to explicitly import this...
 
 import Data.Type.Natural
+import Data.Singletons.Prelude.List
 
 -- type restricted version of `lit` which forces no context on literals
 litPT :: (Lit (ptexpr '[] d), LitCtx (ptexpr '[] d) a) => a -> ptexpr '[] d a
@@ -70,12 +71,9 @@ pt2 a b = appD (appD pt1 $ litPT a) $ litPT b
  Monad mon, LambdaD expr)
 -}
 
-tunn1 :: forall t r u s zp d mon expr . (_)
-  => Proxy u -> mon (expr _ ('L d d) (Cyc t r zp -> Cyc t s zp))
-tunn1 _ = do
-  tunnel1 <- tunnelPT' @u
-  tunnel2 <- tunnelPT'
-  return $ lamD $ \x -> tunnel2 $ tunnel1 x
+tunn1 :: forall t r u s zp d expr . (_)
+  => Proxy u -> expr _ ('L d d) (Cyc t r zp -> Cyc t s zp)
+tunn1 _ = lamD $ \x -> tunnelPT' $ tunnelPT' @u x
 
 type Zq q = ZqBasic q Int64
 -- pt1 ∷ ∀ {zp} {m ∷ Factored} {t ∷ Factored → ★ → ★} {ptexpr ∷ [GHC.Types.*] → Depth → ★ → ★} {d ∷ Depth}
@@ -102,13 +100,12 @@ main = do
          @TrivGad
          @Double
          1.0
-         (return $ pt1 @_ @('T 'Z) @CT @F4 @(Zq 7))
+         (pt1 @_ @('T 'Z) @CT @F4 @(Zq 7))
   putStrLn $ unSCT x
-
 
   -- example with rescale de-duplication when tunneling
   -- print the unapplied PT function
-  putStrLn $ unSPT $ runIdentity $ tunn1 @CT @H0 @H1 @H2 @(Zq PP8) @('T 'Z) Proxy
+  putStrLn $ unSPT $ tunn1 @H2 @_ @('T 'Z) @CT @H0 @H1 @(Zq PP8) Proxy
   -- compile the up-applied function to CT, then print it out
   (y,_) <- compile
          @'[ '(H0, H0'), '(H1,H1'), '(H2, H2') ]
@@ -117,7 +114,7 @@ main = do
          @TrivGad
          @Double
          1.0
-         (tunn1 @CT @H0 @H1 @H2 @(Zq PP8) @('T 'Z) Proxy)
+         (tunn1 @H2 @_ @('T 'Z) @CT @H0 @H1 @(Zq PP8) Proxy)
   -- compile once, interpret with multiple ctexprs!!
   let (z1,z2) = duplicate $ runDeepSeq y
   putStrLn $ unSCT z1
@@ -131,13 +128,13 @@ type H1' = H1 * F13
 type H2' = H2
 
 -- EAC: This is copied from HomomPRF, but it needs a permanent home.
-type TunnelPTCtx' expr d mon t e r s zp =
+type TunnelPTCtx' expr d t e r s zp =
   (e ~ FGCD r s,                                     -- type restriction for simplicity
-   TunnelPT mon expr, TunnelCtxPT expr d t e r s zp, -- call to tunnelPT
+   TunnelPT expr, TunnelCtxPT expr d t e r s zp, -- call to tunnelPT
    e `Divides` r, e `Divides` s, CElt t zp,          -- linearDec
    ZPP zp, TElt t (ZpOf zp))                         -- crtSet
-tunnelPT' :: forall s mon expr t r zp e h d . (TunnelPTCtx' expr d mon t e r s zp)
-  => mon (expr h d (Cyc t r zp) -> expr h d (Cyc t s zp))
+tunnelPT' :: forall s expr t r zp e h d . (TunnelPTCtx' expr d t e r s zp)
+  => expr h d (Cyc t r zp) -> expr (h :++ '[TunnHintType expr d t e r s zp]) d (Cyc t s zp)
 tunnelPT' =
   let crts = proxy crtSet (Proxy::Proxy e)
       r = proxy totientFact (Proxy::Proxy r)

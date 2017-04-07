@@ -5,7 +5,6 @@
 
 module Crypto.Alchemy.Interpreter.ShowPT where
 
-import Control.Applicative
 import Crypto.Alchemy.Depth
 import Crypto.Alchemy.Language.AddPT
 import Crypto.Alchemy.Language.Lam
@@ -42,11 +41,12 @@ instance ModSwPT ShowPT where
 
   modSwitchDec (SPT a) = SPT $ \i -> "modSwitchDec $ " ++ a i
 
-instance (Applicative mon) => TunnelPT mon ShowPT where
+instance TunnelPT ShowPT where
 
   type TunnelCtxPT ShowPT d t e r s zp = ()
+  type TunnHintType ShowPT d t e r s zp = ()
 
-  tunnelPT _ = pure $ \(SPT a) -> SPT $ \i -> "tunnel <FUNC> $ " ++ a i
+  tunnelPT _ (SPT a) = SPT $ \i -> "tunnel <FUNC> $ " ++ a i
 
 instance LambdaD ShowPT h where
   lamD f = SPT $ \i ->

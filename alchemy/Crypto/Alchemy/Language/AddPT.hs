@@ -29,3 +29,10 @@ class AddPT expr where
 (-#) :: (AddPT expr, AdditiveCtxPT expr d a, a ~ Cyc t m zp)
      => expr (h1 :: [*]) d a -> expr (h2 :: [*]) d a -> expr (h1 :++ h2) d a
 a -# b = a +# (negPT b)
+
+{-
+convert :: (a -> Reader m b) -> Reader m (a -> b)
+convert f = do
+  m <- ask
+  return $ \a -> flip runReader m $ f a
+-}

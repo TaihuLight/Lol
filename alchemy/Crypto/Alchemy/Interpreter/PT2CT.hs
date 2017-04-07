@@ -84,11 +84,10 @@ data PT2CT :: [(Factored,Factored)] -- map from plaintext index to ciphertext in
     Proxy z
     -> (KSHintDummy gad v t m' z zq' -> PT2CT m'map zqs zq'map gad v ctexpr hs d a)
     -> PT2CT m'map zqs zq'map gad v ctexpr ((KSHintDummy gad v t m' z zq') ': hs) d a
-  {-GenTH :: (GetTunnHintCtx t e r s e' r' s' z zp zq gad v) =>
+  GenTH :: (GetTunnHintCtx t e r s e' r' s' z zp zq gad v) =>
     Proxy z
-    -> Linear t zp e r s
-    -> (TunnelInfo gad t e r s e' r' s' zp zq -> PT2CT m'map zqs zq'map gad v ctexpr hs d a)
-    -> PT2CT m'map zqs zq'map gad v ctexpr ((TunnelInfo gad t e r s e' r' s' zp zq) ': hs) d a-}
+    -> ((Linear t zp e r s -> TunnelInfo gad t e r s e' r' s' zp zq) -> PT2CT m'map zqs zq'map gad v ctexpr hs d a)
+    -> PT2CT m'map zqs zq'map gad v ctexpr ((TunnelInfo gad t e r s e' r' s' zp zq) ': hs) d a
 
 
 data KSHintDummy gad v t m' z zq' = KSH (KSQuadCircHint gad (Cyc t m' zq'))
@@ -101,14 +100,14 @@ compile' (P2C b) = return b
 compile' (GenKSH z b) = do
           hint <- getKSHint z
           compile' $ b $ KSH hint
+compile' (GenTH z b) = do
+          f <- genTunnHint z
+          compile' $ b f
 
-compile :: forall m'map zqs zq'map gad v ctexpr d a rnd mon h .
-  (MonadRandom rnd, mon ~ ReaderT v (StateT ([Dynamic],[Dynamic]) rnd))
-  => v -> mon (PT2CT m'map zqs zq'map gad v ctexpr h d a) -> rnd (ctexpr (CTType m'map zqs d a), ([Dynamic],[Dynamic]))
-compile v a =
-  flip runStateT ([],[]) $ flip runReaderT v $ do
-    a' <- a
-    compile' a'
+compile :: forall m'map zqs zq'map gad v ctexpr d a rnd h .
+  (MonadRandom rnd)
+  => v -> PT2CT m'map zqs zq'map gad v ctexpr h d a -> rnd (ctexpr (CTType m'map zqs d a), ([Dynamic],[Dynamic]))
+compile v a = flip runStateT ([],[]) $ flip runReaderT v $ compile' a
 
 -- this function prevents explosions of cases in binary operators with multiple GADT constructors
 push :: PT2CT m'map zqs zq'map gad v ctexpr h1 d1 a
@@ -116,7 +115,7 @@ push :: PT2CT m'map zqs zq'map gad v ctexpr h1 d1 a
         -> PT2CT m'map zqs zq'map gad v ctexpr (h1 :++ h2) d2 b
 push (P2C a) f = f a
 push (GenKSH z g) f = GenKSH z $ \h -> push (g h) f
---push (GenTH z g h) f = GenTH z g $ \i -> push (h i) f
+push (GenTH z g) f = GenTH z $ \h -> push (g h) f
 
 p2cmap :: (ctexpr (CTType m'map zqs d a) -> ctexpr (CTType m'map zqs d' b))
   -> PT2CT m'map zqs zq'map gad v ctexpr h d a
@@ -195,19 +194,6 @@ type TunnelCtxPT' ctexpr t e r s r' s' z zp zq zq' gad v =
    Typeable t, Typeable r', Typeable s', Typeable z, -- bug; see genTunnHint
    RescaleCtxCT ctexpr (CT r zp (Cyc t r' zq')) zq, RescaleCtxCT ctexpr (CT s zp (Cyc t s' zq)) zq')
 
-instance (SymCT ctexpr, MonadRandom mon, MonadReader v mon, MonadState ([Dynamic],[Dynamic]) mon)
-  => TunnelPT mon (PT2CT m'map zqs zq'map gad v ctexpr) where
-  type TunnelCtxPT (PT2CT m'map zqs zq'map gad v ctexpr) d t e r s zp =
-    (TunnelCtxPT' ctexpr t e r s (Lookup r m'map) (Lookup s m'map) (LiftOf zp) zp (zqs !! d) (zqs !! (Add1 d)) gad v)
-
-  tunnelPT :: forall d t e r s zp h .
-    (TunnelCtxPT (PT2CT m'map zqs zq'map gad v ctexpr) d t e r s zp)
-    => Linear t zp e r s -> mon (PT2CT m'map zqs zq'map gad v ctexpr h d (Cyc t r zp)
-                                 -> PT2CT m'map zqs zq'map gad v ctexpr h d (Cyc t s zp))
-  tunnelPT f = do
-    thint <- genTunnHint @gad @(LiftOf zp) @(zqs !! (Add1 d)) Proxy f
-    return $ p2cmap (rescaleCT . tunnelCT thint . rescaleCT)
-{-
 instance (SymCT ctexpr)
   => TunnelPT (PT2CT m'map zqs zq'map gad v ctexpr) where
   type TunnelCtxPT (PT2CT m'map zqs zq'map gad v ctexpr) d t e r s zp =
@@ -215,15 +201,15 @@ instance (SymCT ctexpr)
   type TunnHintType (PT2CT m'map zqs zq'map gad v ctexpr) d t e r s zp =
     TunnelInfo gad t e r s (e * ((Lookup r m'map) / r)) (Lookup r m'map) (Lookup s m'map) zp (zqs !! (Add1 d))
 
-  tunnelPT :: forall d t e r s zp hs .
-    (TunnelCtxPT (PT2CT m'map zqs zq'map gad v ctexpr) d t e r s zp)
-    => Linear t zp e r s -> PT2CT m'map zqs zq'map gad v ctexpr hs d (Cyc t r zp)
-                                 -> PT2CT m'map zqs zq'map gad v ctexpr (hs :++ '[TunnHintType (PT2CT m'map zqs zq'map gad v ctexpr) d t e r s zp]) d (Cyc t s zp)
-  tunnelPT f a = (push a (\a' ->
+  tunnelPT :: forall d t e r s zp hs i .
+    (TunnelCtxPT (PT2CT m'map zqs zq'map gad v ctexpr) d t e r s zp,
+     i ~ PT2CT m'map zqs zq'map gad v ctexpr (hs :++ '[TunnHintType (PT2CT m'map zqs zq'map gad v ctexpr) d t e r s zp]) d (Cyc t s zp))
+    => Linear t zp e r s -> PT2CT m'map zqs zq'map gad v ctexpr hs d (Cyc t r zp) -> PT2CT m'map zqs zq'map gad v ctexpr (hs :++ '[TunnHintType (PT2CT m'map zqs zq'map gad v ctexpr) d t e r s zp]) d (Cyc t s zp)
+  tunnelPT linf a = ((push a (\a' ->
     -- EAC: the fact that I need a signature here seems like a bug.
-    GenTH Proxy f $ \(h :: TunnelInfo _ _ _ _ _ _ _ _ _ (zqs !! (Add1 d))) ->
-      P2C $ rescaleCT $ tunnelCT h $ rescaleCT a')) \\ appEmpty a
--}
+    GenTH Proxy $ \(hintGen :: _ -> TunnelInfo _ _ _ _ _ _ _ _ _ (zqs !! (Add1 d))) ->
+      P2C $ rescaleCT $ tunnelCT (hintGen linf) $ rescaleCT a')) :: i) \\ appEmpty a
+
 instance (Lambda ctexpr) => LambdaD (PT2CT m'map zqs zq'map gad v ctexpr) '[] where
   lamD f = P2C $ lam $ runP2C . f . P2C
   appD (P2C f) a = p2cmap (app f) a
@@ -238,22 +224,15 @@ instance (Lambda ctexpr, GetKSHintCtx gad v t m' z zq', LambdaD (PT2CT m'map zqs
       GenKSH _ b -> b h
   appD f (GenKSH z a) = GenKSH z $ appD f . a
 
-{-
-(GetTunnHintCtx t e r s e' r' s' z zp zq gad v) =>
-    Proxy z
-    -> Linear t zp e r s
-    -> (TunnelInfo gad t e r s e' r' s' zp zq -> PT2CT m'map zqs zq'map gad v ctexpr hs d a)
-    -> PT2CT m'map zqs zq'map gad v ctexpr ((TunnelInfo gad t e r s e' r' s' zp zq) ': hs) d a
-
 instance (GetTunnHintCtx t e r s e' r' s' z zp zq gad v,
           Lambda ctexpr, LambdaD (PT2CT m'map zqs zq'map gad v ctexpr) hs)
   => LambdaD (PT2CT m'map zqs zq'map gad v ctexpr) ((TunnelInfo gad t e r s e' r' s' zp zq) ': hs) where
 
-  lamD f = GenTH Proxy g $ \h -> lamD $ \a ->
+  lamD f = GenTH Proxy $ \h -> lamD $ \a ->
     case f a of
-      GenTH _ g b -> b h
-  appD f (GenTH z g a) = GenTH z g $ appD f . a
--}
+      GenTH _ b -> b h
+  appD f (GenTH z a) = GenTH z $ appD f . a
+
 ---- Monad helper functions
 
 -- retrieve the scaled variance parameter from the Reader
@@ -279,11 +258,11 @@ type GetTunnHintCtx t e r s e' r' s' z zp zq gad v =
 genTunnHint :: forall gad z zq mon t e r s e' r' s' zp v .
   (MonadReader v mon, MonadState ([Dynamic], [Dynamic]) mon, MonadRandom mon,
    GetTunnHintCtx t e r s e' r' s' z zp zq gad v)
-  => Proxy z -> Linear t zp e r s -> mon (TunnelInfo gad t e r s e' r' s' zp zq)
-genTunnHint _ linf = do
+  => Proxy z -> mon (Linear t zp e r s -> TunnelInfo gad t e r s e' r' s' zp zq)
+genTunnHint _ = do
   skout <- getKey @z
   sk <- getKey @z
-  tunnelInfo linf skout sk
+  tunnelInfo skout sk
 
 type GetKSHintCtx gad v t m' z zq' =
   (GenSKCtx t m' z v, Typeable (Cyc t m' z),

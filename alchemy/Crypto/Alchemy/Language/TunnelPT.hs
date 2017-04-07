@@ -1,4 +1,4 @@
-
+{-
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies          #-}
@@ -17,9 +17,9 @@ class (Applicative mon) => TunnelPT mon expr where
 
   tunnelPT :: (TunnelCtxPT expr d t e r s zp)
            => Linear t zp e r s -> mon (expr (h :: [*]) d (Cyc t r zp) -> expr h d (Cyc t s zp))
+-}
 
 
-{-
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies          #-}
@@ -41,4 +41,3 @@ class TunnelPT expr where
 
   tunnelPT :: (TunnelCtxPT expr d t e r s zp)
            => Linear t zp e r s -> expr h d (Cyc t r zp) -> expr (h :++ '[TunnHintType expr d t e r s zp]) d (Cyc t s zp)
--}
