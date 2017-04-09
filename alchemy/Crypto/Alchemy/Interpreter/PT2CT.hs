@@ -262,7 +262,7 @@ genTunnHint :: forall gad z zq mon t e r s e' r' s' zp v .
 genTunnHint _ = do
   skout <- getKey @z
   sk <- getKey @z
-  tunnelInfo skout sk
+  tunnelInfo' skout sk
 
 type GetKSHintCtx gad v t m' z zq' =
   (GenSKCtx t m' z v, Typeable (Cyc t m' z),

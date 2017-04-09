@@ -45,7 +45,7 @@ SK, PT, CT -- don't export constructors!
 , keySwitchLinear, keySwitchQuadCirc
 -- * Ring switching
 , embedSK, embedCT, twaceCT
-, TunnelInfo, tunnelInfo
+, TunnelInfo, tunnelInfo, tunnelInfo'
 , tunnelCT
 -- * Constraint synonyms
 , GenSKCtx, EncryptCtx, ToSDCtx, ErrorTermCtx
@@ -75,7 +75,6 @@ import Control.DeepSeq
 import Control.Monad        as CM
 import Control.Monad.Random hiding (lift)
 import Data.Maybe
-import Data.Traversable     as DT
 import Data.Typeable
 
 import MathObj.Polynomial as P
@@ -280,19 +279,6 @@ type KSHintCtx gad t m' z zq =
   (LWECtx t m' z zq, Reduce (DecompOf zq) zq, Gadget gad zq,
    NFElt zq, CElt t (DecompOf zq))
 
-
-{-
-ksHint :: (KSHintCtx gad t m' z zq, MonadRandom rnd)
-          => SK (Cyc t m' z) -> Cyc t m' z
-          -> rnd (Tagged gad [Polynomial (Cyc t m' zq)])
-ksHint skout val = do -- rnd monad
-  let valq = reduce val
-      valgad = encode valq
-  -- CJP: clunky, but that's what we get without a MonadTagged
-  samples <- DT.mapM (\as -> replicateM (length as) (lweSample skout)) (valgad :: Tagged gad [u])
-  return $! force $ zipWith (+) <$> (map P.const <$> valgad) <*> samples
--}
-
 -- | Generate a hint that "encrypts" a value under a secret key, in
 -- the sense required for key-switching.  The hint works for any
 -- plaintext modulus, but must be applied on a ciphertext in MSD form.
@@ -341,11 +327,11 @@ newtype KSQuadCircHint gad r'q' = KSQHint (Tagged gad [Polynomial r'q']) derivin
 -- one under \( s_{\text{out}} \).
 ksLinearHint :: (KSHintCtx gad t m' z zq', MonadRandom rnd)
   => SK (Cyc t m' z) -- sout
-  -> rnd (SK (Cyc t m' z) -- sin
-          -> KSLinearHint gad (Cyc t m' zq'))
-ksLinearHint skout = do
+  -> SK (Cyc t m' z) -- sin
+  -> rnd (KSLinearHint gad (Cyc t m' zq'))
+ksLinearHint skout (SK _ sin) = do
   ksh <- ksHint skout
-  return $ \(SK _ sin)  -> KSLHint $ ksh sin
+  return $ KSLHint $ ksh sin
 
 -- | Switch a linear ciphertext using the supplied hint.
 keySwitchLinear :: (KeySwitchCtx gad t m' zp zq zq')
@@ -527,10 +513,20 @@ type GenTunnelInfoCtx t e r s e' r' s' z zp zq gad =
 -- | Generates auxilliary data needed to tunnel from \(\O_{r'}\) to \(\O_{s'}\).
 tunnelInfo :: forall gad t e r s e' r' s' z zp zq rnd .
   (MonadRandom rnd, GenTunnelInfoCtx t e r s e' r' s' z zp zq gad)
+  => Linear t zp e r s
+  -> SK (Cyc t s' z)
+  -> SK (Cyc t r' z)
+  -> rnd (TunnelInfo gad t e r s e' r' s' zp zq)
+tunnelInfo f skout skin = do
+  ti <- tunnelInfo' skout skin
+  return $ ti f
+
+tunnelInfo' :: forall gad t e r s e' r' s' z zp zq rnd .
+  (MonadRandom rnd, GenTunnelInfoCtx t e r s e' r' s' z zp zq gad)
   => SK (Cyc t s' z)
   -> SK (Cyc t r' z)
   -> rnd (Linear t zp e r s -> TunnelInfo gad t e r s e' r' s' zp zq)
-tunnelInfo skout (SK _ sin) = (do -- generate hints
+tunnelInfo' skout (SK _ sin) = (do -- generate hints
   -- choice of basis here must match coeffs* basis below
   let ps = proxy powBasis (Proxy::Proxy e')
   kshs <- replicateM (length ps) (ksHint skout)

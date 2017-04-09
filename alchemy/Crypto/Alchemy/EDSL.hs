@@ -76,7 +76,7 @@ tunn1 :: forall t r u s zp d expr . (_)
 tunn1 _ = lamD $ \x -> tunnelPT' $ tunnelPT' @u x
 
 type Zq q = ZqBasic q Int64
--- pt1 ∷ ∀ {zp} {m ∷ Factored} {t ∷ Factored → ★ → ★} {ptexpr ∷ [GHC.Types.*] → Depth → ★ → ★} {d ∷ Depth}
+
 main :: IO ()
 main = do
 -- EAC: There's a GHC bug here: GHC *can* infer the type of the signature (e.g., of pt1)
@@ -86,12 +86,18 @@ main = do
 -- order "ptexpr d t m zp".
 --https://ghc.haskell.org/trac/ghc/ticket/13524
 
+
+
   -- print the unapplied PT function
-  putStrLn $ unSPT $ pt1 @ShowPT @('T 'Z) @CT @F4 @Int64  -- @CT @F4 @Int64 @('T 'Z)
+  let (pt1a, pt1b) = dupPT $ pt1 @_ @('T 'Z) @CT @F4 @(Zq 7)
+  putStrLn $ unSPT pt1a
+
+  -- EAC: I'm not sure why I don't have to specify @('T 'Z)
+  let (pt2a, pt2b) = dupPT $ pt2 @CT @F4 @Int64 7 11
   -- apply the PT function to arguments, then print it out
-  putStrLn $ unSPT $ pt2 @CT @F4 @Int64 @('T 'Z) 7 11
+  putStrLn $ unSPT pt2a
   -- apply the PT function to arguments and evaluate the function
-  putStrLn $ show $ unID $ pt2 @CT @F4 @Int64 7 11
+  putStrLn $ show $ unID pt2b
   -- compile the un-applied function to CT, then print it out
   (x,_) <- compile
          @'[ '(F4, F8) ]
@@ -100,12 +106,14 @@ main = do
          @TrivGad
          @Double
          1.0
-         (pt1 @_ @('T 'Z) @CT @F4 @(Zq 7))
+         pt1b
   putStrLn $ unSCT x
 
   -- example with rescale de-duplication when tunneling
+  let (tunn1a, tunn1b) = dupPT $ tunn1 @H2 @_ @('T 'Z) @CT @H0 @H1 @(Zq PP8) Proxy
+
   -- print the unapplied PT function
-  putStrLn $ unSPT $ tunn1 @H2 @_ @('T 'Z) @CT @H0 @H1 @(Zq PP8) Proxy
+  putStrLn $ unSPT tunn1a
   -- compile the up-applied function to CT, then print it out
   (y,_) <- compile
          @'[ '(H0, H0'), '(H1,H1'), '(H2, H2') ]
@@ -114,7 +122,7 @@ main = do
          @TrivGad
          @Double
          1.0
-         (tunn1 @H2 @_ @('T 'Z) @CT @H0 @H1 @(Zq PP8) Proxy)
+         tunn1b
   -- compile once, interpret with multiple ctexprs!!
   let (z1,z2) = duplicate $ runDeepSeq y
   putStrLn $ unSCT z1
