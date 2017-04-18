@@ -21,10 +21,15 @@ class Lambda expr where
   app :: expr (a -> b) -> expr a -> expr b
 
 class LambdaD expr where
-  lamD :: (Applicative i, Functor m) => (forall j . (Applicative j) => (i :. j) (expr da a) -> (m :. (i :. j)) (expr db b))
+  lamD :: (Applicative i, Applicative m) => (forall j . (Applicative j) => (i :. j) (expr da a) -> (m :. (i :. j)) (expr db b))
           -> (m :. i) (expr ('L da db) (a->b))
 
   appD :: (Applicative m) => m (expr ('L da db) (a->b)) -> m (expr da a) -> m (expr db b)
+
+lam' :: (Functor m, Applicative i, Lambda expr) =>
+  (forall j . (Applicative j) => (i :. j) (expr a) -> (m :. (i :. j)) (expr b))
+    -> (m :. i) (expr (a -> b))
+lam' f = fmap lam $ J $ fmap unJ $ unJ $ f $ J $ pure id
 
 -- lam* first weakens repeatedly, then reassociates in one go
 lam1 :: (Applicative m, Applicative i, LambdaD expr) =>

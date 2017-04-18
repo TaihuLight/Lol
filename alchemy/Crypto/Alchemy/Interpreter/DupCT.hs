@@ -1,12 +1,13 @@
 {-# LANGUAGE TypeFamilies #-}
 
-module Crypto.Alchemy.Interpreter.Duplicate where
+module Crypto.Alchemy.Interpreter.DupCT where
 
 import Crypto.Alchemy.Language.CT
 import Crypto.Alchemy.Language.Lam
+import Crypto.Alchemy.Language.Lit
 
-duplicate :: Dup expr1 expr2 a -> (expr1 a, expr2 a)
-duplicate (Dup a b) = (a,b)
+dupCT :: Dup expr1 expr2 a -> (expr1 a, expr2 a)
+dupCT (Dup a b) = (a,b)
 
 data Dup expr1 expr2 a = Dup {unDupA :: expr1 a, unDupB :: expr2 a}
 
@@ -54,3 +55,8 @@ instance (Lambda expr1, Lambda expr2) => Lambda (Dup expr1 expr2) where
   lam f = Dup (lam $ unDupA . f . flip Dup undefined) (lam $ unDupB . f . Dup undefined)
 
   app (Dup fa fb) (Dup a b) = Dup (app fa a) (app fb b)
+
+instance (Lit expr1, Lit expr2) => Lit (Dup expr1 expr2) where
+  type LitCtx (Dup expr1 expr2) a = (LitCtx expr1 a, LitCtx expr2 a)
+  lit a = Dup (lit a) (lit a)
+

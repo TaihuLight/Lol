@@ -10,6 +10,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE PolyKinds             #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RebindableSyntax      #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeApplications      #-}
@@ -91,9 +92,9 @@ newtype PT2CTState = St ([Dynamic],[Dynamic])
 -- explicit forall for type application
 compile :: forall m'map zqs zq'map gad v ctexpr d a rnd .
   (MonadRandom rnd)
-  => v -> CustomMonad v rnd (PT2CT m'map zqs zq'map gad v ctexpr d a) -> rnd (ctexpr (CTType m'map zqs d a), PT2CTState)
+  => v -> ((CustomMonad v rnd) :. Identity) (PT2CT m'map zqs zq'map gad v ctexpr d a) -> rnd (ctexpr (CTType m'map zqs d a), PT2CTState)
 compile v a = do
-  (b,s) <- flip runStateT ([],[]) $ flip runReaderT v $ unCMon a
+  (b,s) <- flip runStateT ([],[]) $ flip runReaderT v $ unCMon $ runIdentity <$> unJ a
   return (runP2C b, St s)
 
 -- idea: if we create a CT with a type that doesn't appear in
@@ -107,15 +108,15 @@ instance (SymCT ctexpr) => AddPT (PT2CT m'map zqs zq'map gad v ctexpr) where
 
   type AddPubCtxPT   i (PT2CT m'map zqs zq'map gad v ctexpr) d (Cyc t m zp) =
     (AddPubCtxCT ctexpr (CT m zp (Cyc t (Lookup m m'map) (zqs !! d))), Functor i)
-  --type MulPubCtxPT   (PT2CT m'map zqs zq'map gad v ctexpr) d (Cyc t m zp) =
-  --  (MulPubCtxCT ctexpr (CT m zp (Cyc t (Lookup m m'map) (zqs !! d))))
+  type MulPubCtxPT   i (PT2CT m'map zqs zq'map gad v ctexpr) d (Cyc t m zp) =
+    (MulPubCtxCT ctexpr (CT m zp (Cyc t (Lookup m m'map) (zqs !! d))), Functor i)
   type AdditiveCtxPT i (PT2CT m'map zqs zq'map gad v ctexpr) d (Cyc t m zp) =
     (AdditiveCtxCT ctexpr (CT m zp (Cyc t (Lookup m m'map) (zqs !! d))), Applicative i)
 
   a +# b = P2C <$> ((+^) <$> (runP2C <$> a) <*> (runP2C <$> b))
-  --negPT = p2cmap negCT
+  negPT = p2cmap negCT
   addPublicPT = p2cmap . addPublicCT
-  --mulPublicPT = p2cmap . mulPublicCT
+  mulPublicPT = p2cmap . mulPublicCT
 
 type RingCtxPT' ctexpr t m m' z zp zq zq' zq'map gad v =
   (RingCtxCT ctexpr (CT m zp (Cyc t m' zq')),
@@ -169,12 +170,19 @@ instance (SymCT ctexpr, MonadRandom mon, MonadReader v mon, MonadState ([Dynamic
   tunnelPT f = do
     thint <- genTunnHint @gad @(zqs !! (Add1 d)) f
     return $ p2cmap (rescaleCT . tunnelCT thint . rescaleCT)
+
+lam' :: (Functor m, Applicative i, Lambda expr) =>
+  (forall j . (Applicative j) => (i :. j) (expr a) -> (m :. (i :. j)) (expr b))
+    -> (m :. i) (expr (a -> b))
+lam' f = fmap lam (J $ fmap unJ $ unJ $ f (J $ pure id))
 -}
 
 instance (Lambda ctexpr) => LambdaD (PT2CT m'map zqs zq'map gad v ctexpr) where
+
+  -- EAC: Should be able to use lam', which is identical to the code I wrote below, but the compiler won't have it.
   lamD f =
-    let f' = J $ fmap unJ $ unJ $ f  $ J $ pure $ id
-    in P2C <$> (fmap lam $ (\g -> runP2C . g . P2C) <$> f')
+    let f' x = runP2C <$> f (P2C <$> x)
+    in P2C <$> (fmap lam (J $ fmap unJ $ unJ $ f' (J $ pure $ id)))
 
   appD f x = P2C <$> (app <$> (runP2C <$> f) <*> (runP2C <$> x))
 
