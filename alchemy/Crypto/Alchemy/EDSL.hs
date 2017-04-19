@@ -84,19 +84,21 @@ type Zq q = ZqBasic q Int64
 
 main :: IO ()
 main = do
-  let (pt1'a, pt1'b) = dupPT $ pt1' @CT @F4 @(Zq PP8) @('T 'Z)
-      (pt1''a, pt1''b) = dupPT $ pt1'' @CT @F4 @Int64 7 11
+  -- EAC: not perfect: we'd like to be able to interpret each expression with different *monads* as well
+  -- as with different interpreters, but the type of dupPT seems to prevent different monadic interpretations
+  (pt1'a, pt1'b) <- dupPT <$> runIdentity <$> (unJ $ pt1' @CT @F4 @(Zq PP8) @('T 'Z))
+  let (pt1''a, pt1''b) = dupPTM $ runIdentity <$> (unJ $ pt1'' @CT @F4 @Int64 7 11)
 
   -- print the unapplied PT function
-  putStrLn $ unSPT $ runIdentity $ runIdentity $ unJ pt1'a
+  putStrLn $ unSPT pt1'a
 
   -- apply the PT function to arguments, then print it out
-  putStrLn $ unSPT $ runIdentity $ runIdentity $ unJ pt1''a
+  putStrLn $ unSPT $ runIdentity pt1''a
   -- apply the PT function to arguments and evaluate the function
-  putStrLn $ show $ unID $ runIdentity $ runIdentity $ unJ pt1''b
+  putStrLn $ show $ unID $ runIdentity pt1''b
 
   --putStrLn $ unSPT $ runIdentity $ runIdentity $ unJ pt1'b
-
+{-
   (x,_) <- compile
          @'[ '(F4, F8) ]
          @'[ Zq 7, (Zq 11, Zq 7) ]
@@ -106,7 +108,7 @@ main = do
          1.0
          pt1'b --(pt1' @CT @F4 @(Zq PP8) @('T 'Z))
   putStrLn $ unSCT x
-
+-}
 
   -- compile the un-applied function to CT, then print it out
 

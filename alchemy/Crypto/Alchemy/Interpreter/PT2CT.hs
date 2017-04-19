@@ -92,9 +92,9 @@ newtype PT2CTState = St ([Dynamic],[Dynamic])
 -- explicit forall for type application
 compile :: forall m'map zqs zq'map gad v ctexpr d a rnd .
   (MonadRandom rnd)
-  => v -> ((CustomMonad v rnd) :. Identity) (PT2CT m'map zqs zq'map gad v ctexpr d a) -> rnd (ctexpr (CTType m'map zqs d a), PT2CTState)
+  => v -> CustomMonad v rnd (PT2CT m'map zqs zq'map gad v ctexpr d a) -> rnd (ctexpr (CTType m'map zqs d a), PT2CTState)
 compile v a = do
-  (b,s) <- flip runStateT ([],[]) $ flip runReaderT v $ unCMon $ runIdentity <$> unJ a
+  (b,s) <- flip runStateT ([],[]) $ flip runReaderT v $ unCMon a
   return (runP2C b, St s)
 
 -- idea: if we create a CT with a type that doesn't appear in
