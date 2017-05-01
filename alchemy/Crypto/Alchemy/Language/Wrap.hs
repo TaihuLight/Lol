@@ -3,7 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Crypto.Alchemy.Language.Wrap (Wrap, unwrap, encryptArg, injectCyc) where
+module Crypto.Alchemy.Language.Wrap (Wrap, unwrap, encryptArg, injectCyc, liftW2) where
 
 import Crypto.Alchemy.Interpreter.Compiler.Environment
 
@@ -26,3 +26,6 @@ encryptArg st x = flip evalState st $ do
   (sk :: Maybe (SK (Cyc t m' z))) <- lookupKey -- ONLY lookup the key, do NOT generate!
                   -- my feeling is that this should never fail, but we don't have static proof of that
   return $ (\s -> W <$> encrypt s x) <$> sk
+
+liftW2 :: (a -> b -> c) -> Wrap a -> Wrap b -> Wrap c
+liftW2 f (W a) (W b) = W $ f a b

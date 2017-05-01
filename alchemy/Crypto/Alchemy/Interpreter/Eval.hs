@@ -43,7 +43,7 @@ instance DB E a where
   s a = E $ unE a . fst
 
 instance (Additive.C a) => Add E (Wrap a) where
-  --x +: y = (+) <$> x <*> y
+  x +: y = (liftW2 (+)) <$> x <*> y
   negate' x = (fmap negate) <$> x
 
 instance (Additive.C a) => AddLit E a where
@@ -51,7 +51,7 @@ instance (Additive.C a) => AddLit E a where
 
 instance (Ring.C a) => Mul E (Wrap a) where
   type PreMul E (Wrap a) = (Wrap a)
-  --x *: y = (*) <$> x <*> y
+  x *: y = (liftW2 (*)) <$> x <*> y
 
 instance (Ring.C a) => MulLit E a where
   mulLit x y = (fmap (x *)) <$> y
