@@ -59,10 +59,10 @@ instance (SHE expr) => SHE (DupRescale expr) where
 
   type ModSwitchPTCtx (DupRescale expr) ct zp' =
     (ModSwitchPTCtx expr ct zp')
-  type RescaleLinearCtx (DupRescale expr) (Wrap (CT m zp (Cyc t m' zq))) zq' =
+  type RescaleLinearCtx (DupRescale expr) (CT m zp (Cyc t m' zq)) zq' =
     (Typeable (CT m zp (Cyc t m' zq)),
      Typeable (CT m zp (Cyc t m' zq')),
-     RescaleLinearCtx expr (Wrap (CT m zp (Cyc t m' zq))) zq')
+     RescaleLinearCtx expr (CT m zp (Cyc t m' zq)) zq')
   type AddPublicCtx (DupRescale expr) ct = (AddPublicCtx expr ct)
   type MulPublicCtx (DupRescale expr) ct = (MulPublicCtx expr ct)
   type KeySwitchQuadCtx (DupRescale expr) ct zq' gad = (KeySwitchQuadCtx expr ct zq' gad)
@@ -71,7 +71,7 @@ instance (SHE expr) => SHE (DupRescale expr) where
   modSwitchPT = dupMap modSwitchPT
 
   rescaleLinear :: forall ct zq' m zp t m' zq e .
-    (RescaleLinearCtx (DupRescale expr) (Wrap (CT m zp (Cyc t m' zq))) zq', ct ~ Wrap (CT m zp (Cyc t m' zq)))
+    (RescaleLinearCtx (DupRescale expr) (CT m zp (Cyc t m' zq)) zq', ct ~ Wrap (CT m zp (Cyc t m' zq)))
             => (DupRescale expr) e (Wrap (CT m zp (Cyc t m' zq'))) -> (DupRescale expr) e ct
   rescaleLinear (Ctx (prev :: expr e ct') x) =
     case (eqT :: Maybe (ct' :~: ct)) of

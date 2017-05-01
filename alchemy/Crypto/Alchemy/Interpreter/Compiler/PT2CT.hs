@@ -105,8 +105,8 @@ instance (Mul ctex ct, SHE ctex, PreMul ctex ct ~ ct,
           ct ~ Cyc2CT m'map zqs (Wrap (PNoise h (Cyc t m zp))), ct ~ Wrap (CT m zp (Cyc t m' zq)),
           z ~ LiftOf zp, zq' ~ (kszq, zq),
           KSHintCtx gad t m' z zq', GenSKCtx t m' z v,
-          RescaleLinearCtx ctex (Wrap (CT m zp (Cyc t m' zq))) (PNoise2Zq zqs (h :+: N2)),
-          KeySwitchQuadCtx ctex (Wrap (CT m zp (Cyc t m' zq))) (kszq, zq) gad,
+          RescaleLinearCtx ctex (CT m zp (Cyc t m' zq)) (PNoise2Zq zqs (h :+: N2)),
+          KeySwitchQuadCtx ctex (CT m zp (Cyc t m' zq)) (kszq, zq) gad,
 
           -- EAC: Should be able to write (only) the two constraints below, but can't:
           -- (Typeable (Cyc t m' z), Typeable (KSQuadCircHint gad (Cyc t m' zq')))

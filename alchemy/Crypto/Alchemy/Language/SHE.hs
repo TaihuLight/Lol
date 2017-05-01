@@ -26,24 +26,24 @@ class SHE expr where
     (e' :: Factored) (r' :: Factored) (s' :: Factored)
     zp zq gad :: Constraint
 
-  modSwitchPT :: (ModSwitchPTCtx expr ct zp', ct ~ Wrap (CT m zp (Cyc t m' zq)))
-    => expr env ct -> expr env (Wrap (CT m zp' (Cyc t m' zq)))
+  modSwitchPT :: (ModSwitchPTCtx expr ct zp', ct ~ CT m zp (Cyc t m' zq))
+    => expr env (Wrap ct) -> expr env (Wrap (CT m zp' (Cyc t m' zq)))
 
-  rescaleLinear :: (RescaleLinearCtx expr ct zq', ct ~ Wrap (CT m zp (Cyc t m' zq)))
-    => expr env (Wrap (CT m zp (Cyc t m' zq'))) -> expr env ct
+  rescaleLinear :: (RescaleLinearCtx expr ct zq', ct ~ CT m zp (Cyc t m' zq))
+    => expr env (Wrap (CT m zp (Cyc t m' zq'))) -> expr env (Wrap ct)
 
   -- CJP: doesn't quite fall into addLit, though we could possibly
   -- generalize addLit to cover this (not clear if a good idea; this
   -- signature is pretty special)
-  addPublic :: (AddPublicCtx expr ct, ct ~ Wrap (CT m zp (Cyc t m' zq)))
-    => Cyc t m zp -> expr env ct -> expr env ct
+  addPublic :: (AddPublicCtx expr ct, ct ~ CT m zp (Cyc t m' zq))
+    => Cyc t m zp -> expr env (Wrap ct) -> expr env (Wrap ct)
 
   -- CJP: ditto here
-  mulPublic :: (MulPublicCtx expr ct, ct ~ Wrap (CT m zp (Cyc t m' zq)))
-    => Cyc t m zp -> expr env ct -> expr env ct
+  mulPublic :: (MulPublicCtx expr ct, ct ~ CT m zp (Cyc t m' zq))
+    => Cyc t m zp -> expr env (Wrap ct) -> expr env (Wrap ct)
 
-  keySwitchQuad :: (KeySwitchQuadCtx expr ct zq' gad, ct ~ Wrap (CT m zp (Cyc t m' zq)))
-    => KSQuadCircHint gad (Cyc t m' zq') -> expr env ct -> expr env ct
+  keySwitchQuad :: (KeySwitchQuadCtx expr ct zq' gad, ct ~ CT m zp (Cyc t m' zq))
+    => KSQuadCircHint gad (Cyc t m' zq') -> expr env (Wrap ct) -> expr env (Wrap ct)
 
   tunnel :: (TunnelCtx expr t e r s e' r' s' zp zq gad)
     => TunnelInfo gad t e r s e' r' s' zp zq

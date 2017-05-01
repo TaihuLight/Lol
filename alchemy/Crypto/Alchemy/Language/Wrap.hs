@@ -1,7 +1,7 @@
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveFunctor       #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 module Crypto.Alchemy.Language.Wrap (Wrap, unwrap, encryptArg, injectCyc, liftW2) where
 
@@ -24,7 +24,6 @@ encryptArg :: forall t m m' z zp zq rnd .
   => P2CState -> Cyc t m zp -> Maybe (rnd (Wrap (CT m zp (Cyc t m' zq))))
 encryptArg st x = flip evalState st $ do
   (sk :: Maybe (SK (Cyc t m' z))) <- lookupKey -- ONLY lookup the key, do NOT generate!
-                  -- my feeling is that this should never fail, but we don't have static proof of that
   return $ (\s -> W <$> encrypt s x) <$> sk
 
 liftW2 :: (a -> b -> c) -> Wrap a -> Wrap b -> Wrap c

@@ -6,7 +6,7 @@
 {-# LANGUAGE NoImplicitPrelude          #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE UndecidableInstances, ScopedTypeVariables       #-}
+{-# LANGUAGE UndecidableInstances       #-}
 
 module Crypto.Alchemy.Interpreter.Eval ( E, eval) where
 
@@ -58,16 +58,16 @@ instance (Ring.C a) => MulLit E a where
 
 instance SHE E where
 
-  type ModSwitchPTCtx   E (Wrap (CT m zp (Cyc t m' zq))) zp' = (SHE.ModSwitchPTCtx t m' zp zp' zq)
-  type RescaleLinearCtx E (Wrap (CT m zp (Cyc t m' zq))) zq' = (RescaleCyc (Cyc t) zq' zq, ToSDCtx t m' zp zq')
-  type AddPublicCtx E (Wrap (CT m zp (Cyc t m' zq)))         = (SHE.AddPublicCtx t m m' zp zq)
-  type MulPublicCtx E (Wrap (CT m zp (Cyc t m' zq)))         = (SHE.MulPublicCtx t m m' zp zq)
-  type KeySwitchQuadCtx E (Wrap (CT m zp (Cyc t m' zq))) zq' gad = (SHE.KeySwitchCtx gad t m' zp zq zq')
+  type ModSwitchPTCtx   E (CT m zp (Cyc t m' zq)) zp' = (SHE.ModSwitchPTCtx t m' zp zp' zq)
+  type RescaleLinearCtx E (CT m zp (Cyc t m' zq)) zq' = (RescaleCyc (Cyc t) zq' zq, ToSDCtx t m' zp zq')
+  type AddPublicCtx E (CT m zp (Cyc t m' zq))         = (SHE.AddPublicCtx t m m' zp zq)
+  type MulPublicCtx E (CT m zp (Cyc t m' zq))         = (SHE.MulPublicCtx t m m' zp zq)
+  type KeySwitchQuadCtx E (CT m zp (Cyc t m' zq)) zq' gad = (SHE.KeySwitchCtx gad t m' zp zq zq')
   type TunnelCtx    E t e r s e' r' s' zp zq gad      = (SHE.TunnelCtx t r s e' r' s' zp zq gad)
 
-  modSwitchPT     = fmap (fmap SHE.modSwitchPT)
-  rescaleLinear = fmap (fmap SHE.rescaleLinearCT)
-  addPublic      a = fmap $ fmap (SHE.addPublic a)
-  mulPublic      a = fmap $ fmap (SHE.mulPublic a)
-  keySwitchQuad  h = fmap $ fmap (SHE.keySwitchQuadCirc h)
-  tunnel         f = fmap $ fmap (SHE.tunnelCT f)
+  modSwitchPT     = fmap $ fmap   SHE.modSwitchPT
+  rescaleLinear   = fmap $ fmap   SHE.rescaleLinearCT
+  addPublic     a = fmap $ fmap $ SHE.addPublic a
+  mulPublic     a = fmap $ fmap $ SHE.mulPublic a
+  keySwitchQuad h = fmap $ fmap $ SHE.keySwitchQuadCirc h
+  tunnel        f = fmap $ fmap $ SHE.tunnelCT f
