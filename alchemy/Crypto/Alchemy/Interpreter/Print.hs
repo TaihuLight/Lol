@@ -11,6 +11,7 @@ where
 import Crypto.Alchemy.Language.Arithmetic
 import Crypto.Alchemy.Language.Lambda
 import Crypto.Alchemy.Language.SHE
+import Crypto.Alchemy.Language.Wrap
 
 import Crypto.Lol                      (Cyc)
 import Crypto.Lol.Applications.SymmSHE (CT)
@@ -52,8 +53,8 @@ instance SHE P where
 
   type ModSwitchPTCtx   P a zp' = ()
   type RescaleLinearCtx P a zq' = ()
-  type AddPublicCtx     P (CT m zp (Cyc t m' zq)) = (Show (Cyc t m zp))
-  type MulPublicCtx     P (CT m zp (Cyc t m' zq)) = (Show (Cyc t m zp))
+  type AddPublicCtx     P (Wrap (CT m zp (Cyc t m' zq))) = (Show (Cyc t m zp))
+  type MulPublicCtx     P (Wrap (CT m zp (Cyc t m' zq))) = (Show (Cyc t m zp))
   type KeySwitchQuadCtx P a zq' gad = ()
   type TunnelCtx        P t e r s e' r' s' zp zq gad = ()
 

@@ -3,6 +3,8 @@
 
 module Crypto.Alchemy.Language.Arithmetic where
 
+import Crypto.Alchemy.Language.Wrap
+
 -- | Addition.
 
 class Add expr a where
@@ -17,7 +19,7 @@ class Add expr a where
 class AddLit expr a where
   infixl 6 `addLit`
 
-  addLit :: a -> expr e a -> expr e a
+  addLit :: a -> expr e (Wrap a) -> expr e (Wrap a)
 
 -- | Multiplication. (Note that the input type @b@ may differ from the
 -- output type @a@.)
@@ -34,7 +36,7 @@ class Mul expr a where
 class MulLit expr a where
   infixl 7 `mulLit`
 
-  mulLit :: a -> expr e a -> expr e a
+  mulLit :: a -> expr e (Wrap a) -> expr e (Wrap a)
 
 infixl 6  -:
 (-:) :: (Add expr a) => expr e a -> expr e a -> expr e a

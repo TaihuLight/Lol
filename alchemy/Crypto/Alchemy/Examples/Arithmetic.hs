@@ -21,6 +21,7 @@ import Crypto.Alchemy.Interpreter.Print
 
 import Crypto.Alchemy.Language.Arithmetic
 import Crypto.Alchemy.Language.Lambda
+import Crypto.Alchemy.Language.Wrap
 
 import Crypto.Lol                       hiding (Pos (..))
 import Crypto.Lol.Cyclotomic.Tensor.CPP
@@ -44,7 +45,7 @@ main = do
   -- no types needed to show a function!
   putStrLn $ pprint pt1
   -- evaluate a DSL function to a Haskell function, then apply to arguments
-  putStrLn $ show $ eval (pt1 @Int) 7 11
+  putStrLn $ show $ eval (pt1 @(Wrap (Cyc CT F4 (Zq 7)))) (injectCyc 7) (injectCyc 11)
 
   -- compile the un-applied function to CT, then print it out
   (x,st) <- pt2ct
@@ -54,14 +55,14 @@ main = do
          @TrivGad
          @Double
          1.0
-         (pt1 @(PNoise 'Z (Cyc CT F4 (Zq 7))))
+         (pt1 @(Wrap (PNoise 'Z (Cyc CT F4 (Zq 7)))))
 
   -- duplicate the compiled expression
   let (z1,z2) = dup x
       (w1,w2) = dup z1
   -- encrypt some arguments
-  arg1 <- fromJust $ encryptP2C st 7
-  arg2 <- fromJust $ encryptP2C st 11
+  arg1 <- fromJust $ encryptArg st 7
+  arg2 <- fromJust $ encryptArg st 11
   -- print the compiled function
   putStrLn $ pprint w1
   -- if the first modulus is large enough, this will remove the rescales!
@@ -71,7 +72,7 @@ main = do
   -- show the encrypted result
   putStrLn $ show result
   -- show the decrypted result
-  putStrLn $ show $ decryptP2C st result
+  putStrLn $ show $ decryptP2C st $ unwrap result
 
 -- EAC: TODO
 -- encapsulation for compile CTs? (CTWrapper?)

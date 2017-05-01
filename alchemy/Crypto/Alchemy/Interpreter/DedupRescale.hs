@@ -11,6 +11,7 @@ module Crypto.Alchemy.Interpreter.DedupRescale where
 import Crypto.Alchemy.Language.Arithmetic
 import Crypto.Alchemy.Language.Lambda
 import Crypto.Alchemy.Language.SHE
+import Crypto.Alchemy.Language.Wrap
 
 import Crypto.Lol (Cyc)
 import Crypto.Lol.Applications.SymmSHE (CT)
@@ -58,10 +59,10 @@ instance (SHE expr) => SHE (DupRescale expr) where
 
   type ModSwitchPTCtx (DupRescale expr) ct zp' =
     (ModSwitchPTCtx expr ct zp')
-  type RescaleLinearCtx (DupRescale expr) (CT m zp (Cyc t m' zq)) zq' =
+  type RescaleLinearCtx (DupRescale expr) (Wrap (CT m zp (Cyc t m' zq))) zq' =
     (Typeable (CT m zp (Cyc t m' zq)),
      Typeable (CT m zp (Cyc t m' zq')),
-     RescaleLinearCtx expr (CT m zp (Cyc t m' zq)) zq')
+     RescaleLinearCtx expr (Wrap (CT m zp (Cyc t m' zq))) zq')
   type AddPublicCtx (DupRescale expr) ct = (AddPublicCtx expr ct)
   type MulPublicCtx (DupRescale expr) ct = (MulPublicCtx expr ct)
   type KeySwitchQuadCtx (DupRescale expr) ct zq' gad = (KeySwitchQuadCtx expr ct zq' gad)
@@ -70,8 +71,8 @@ instance (SHE expr) => SHE (DupRescale expr) where
   modSwitchPT = dupMap modSwitchPT
 
   rescaleLinear :: forall ct zq' m zp t m' zq e .
-    (RescaleLinearCtx (DupRescale expr) (CT m zp (Cyc t m' zq)) zq', ct ~ CT m zp (Cyc t m' zq))
-            => (DupRescale expr) e (CT m zp (Cyc t m' zq')) -> (DupRescale expr) e ct
+    (RescaleLinearCtx (DupRescale expr) (Wrap (CT m zp (Cyc t m' zq))) zq', ct ~ Wrap (CT m zp (Cyc t m' zq)))
+            => (DupRescale expr) e (Wrap (CT m zp (Cyc t m' zq'))) -> (DupRescale expr) e ct
   rescaleLinear (Ctx (prev :: expr e ct') x) =
     case (eqT :: Maybe (ct' :~: ct)) of
       -- previous op scaled from zq -> zq', so rather than rescaling back down, we just use the un-rescaled value
@@ -81,7 +82,7 @@ instance (SHE expr) => SHE (DupRescale expr) where
   rescaleLinear (NoCtx x) =
     -- even if there's no context, we might be able to remove this rescale if
     -- the input modulus is the same as the output modulus
-    case (eqT :: Maybe ((CT m zp (Cyc t m' zq')) :~: ct)) of
+    case (eqT :: Maybe ((Wrap (CT m zp (Cyc t m' zq'))) :~: ct)) of
       (Just Refl) -> NoCtx x
       Nothing -> Ctx x $ rescaleLinear x
 

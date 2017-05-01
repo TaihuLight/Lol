@@ -18,7 +18,7 @@ module Crypto.Alchemy.Interpreter.Compiler.PT2CT
 ( PT2CT
 , PNoise
 , P2CState
-, pt2ct, encryptP2C, decryptP2C
+, pt2ct, decryptP2C
 ) where
 
 import Control.Monad.Random
@@ -36,7 +36,9 @@ import Crypto.Alchemy.Interpreter.Compiler.Noise
 import Crypto.Alchemy.Language.Arithmetic
 import Crypto.Alchemy.Language.Lambda
 import Crypto.Alchemy.Language.SHE
+import Crypto.Alchemy.Language.Wrap
 
+{-
 encryptP2C :: forall t m m' z zp zq rnd .
   (EncryptCtx t m m' z zp zq, z ~ LiftOf zp, Typeable t, Typeable m', Typeable z, MonadRandom rnd)
   => P2CState -> Cyc t m zp -> Maybe (rnd (CT m zp (Cyc t m' zq)))
@@ -44,7 +46,7 @@ encryptP2C st x = flip evalState st $ do
   (sk :: Maybe (SK (Cyc t m' z))) <- lookupKey -- ONLY lookup the key, do NOT generate!
                   -- my feeling is that this should never fail, but we don't have static proof of that
   return $ (flip encrypt x) <$> sk
-
+-}
 decryptP2C :: forall t m m' z zp zq . (DecryptCtx t m m' z zp zq, z ~ LiftOf zp, Typeable t, Typeable m', Typeable z)
   => P2CState -> CT m zp (Cyc t m' zq) -> Maybe (Cyc t m zp)
 decryptP2C st x = flip evalState st $ do
@@ -100,23 +102,23 @@ instance (Add ctex (Cyc2CT m'map zqs a), Applicative mon)
   negate' (PC a) = PC $ negate' <$> a
 
 instance (Mul ctex ct, SHE ctex, PreMul ctex ct ~ ct,
-          ct ~ Cyc2CT m'map zqs (PNoise h (Cyc t m zp)), ct ~ CT m zp (Cyc t m' zq),
+          ct ~ Cyc2CT m'map zqs (Wrap (PNoise h (Cyc t m zp))), ct ~ Wrap (CT m zp (Cyc t m' zq)),
           z ~ LiftOf zp, zq' ~ (kszq, zq),
           KSHintCtx gad t m' z zq', GenSKCtx t m' z v,
-          RescaleLinearCtx ctex (CT m zp (Cyc t m' zq)) (PNoise2Zq zqs (h :+: N2)),
-          KeySwitchQuadCtx ctex (CT m zp (Cyc t m' zq)) (kszq, zq) gad,
+          RescaleLinearCtx ctex (Wrap (CT m zp (Cyc t m' zq))) (PNoise2Zq zqs (h :+: N2)),
+          KeySwitchQuadCtx ctex (Wrap (CT m zp (Cyc t m' zq))) (kszq, zq) gad,
 
           -- EAC: Should be able to write (only) the two constraints below, but can't:
           -- (Typeable (Cyc t m' z), Typeable (KSQuadCircHint gad (Cyc t m' zq')))
           -- See https://ghc.haskell.org/trac/ghc/ticket/13490
           Typeable t, Typeable zq, Typeable kszq, Typeable gad, Typeable z, Typeable m',
           MonadRandom mon, MonadReader v mon, MonadState P2CState mon)
-  => Mul (PT2CT m'map zqs kszq gad v ctex mon) (PNoise h (Cyc t m zp)) where
+  => Mul (PT2CT m'map zqs kszq gad v ctex mon) (Wrap (PNoise h (Cyc t m zp))) where
 
-  type PreMul (PT2CT m'map zqs kszq gad v ctex mon) (PNoise h (Cyc t m zp)) = PNoise (h :+: N2) (Cyc t m zp)
+  type PreMul (PT2CT m'map zqs kszq gad v ctex mon) (Wrap (PNoise h (Cyc t m zp))) = Wrap (PNoise (h :+: N2) (Cyc t m zp))
 
   (*:) :: forall a b e expr rp .
-       (rp ~ Cyc t m zp, a ~ PNoise h rp, b ~ PNoise (h :+: ('S ('S 'Z))) rp,
+       (rp ~ Cyc t m zp, a ~ Wrap (PNoise h rp), b ~ Wrap (PNoise (h :+: ('S ('S 'Z))) rp),
         expr ~ PT2CT m'map zqs kszq gad v ctex mon)
        => expr e b -> expr e b -> expr e a
   (PC a) *: (PC b) = PC $ do
@@ -130,8 +132,8 @@ instance (Mul ctex ct, SHE ctex, PreMul ctex ct ~ ct,
 
 type family Cyc2CT m'map zqs e where
 
-  Cyc2CT m'map zqs (PNoise h (Cyc t m zp)) =
-    CT m zp (Cyc t (Lookup m m'map) (PNoise2Zq zqs h))
+  Cyc2CT m'map zqs (Wrap (PNoise h (Cyc t m zp))) =
+    Wrap (CT m zp (Cyc t (Lookup m m'map) (PNoise2Zq zqs h)))
 
   -- for environments
   Cyc2CT m'map zqs (a,b)    = (Cyc2CT m'map zqs a,   Cyc2CT m'map zqs b)
