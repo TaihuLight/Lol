@@ -48,7 +48,7 @@ import Crypto.Alchemy.MonadAccumulator
 
 -- | Interprets plaintext operations as their corresponding
 -- (homomorphic) ciphertext operations.  The represented plaintext
--- types should have the form 'PNoise h (Cyc t m zp)'.
+-- types should have the form 'PNoiseCyc h t m zp'.
 newtype PT2CT
   m'map    -- | list (map) of (plaintext index m, ciphertext index m')
   zqs      -- | list of pairwise coprime Zq components for ciphertexts
@@ -58,7 +58,7 @@ newtype PT2CT
   ctex     -- | interpreter of ciphertext operations
   mon      -- | monad for creating keys/noise
   e        -- | environment
-  a        -- | plaintext type; should be of the form 'PNoise h (Cyc t m zp)'
+  a        -- | plaintext type; should be of the form 'PNoiseCyc h t m zp'
   = PC { unPC :: mon (ctex (Cyc2CT m'map zqs e) (Cyc2CT m'map zqs a)) }
 
 -- | Transform a plaintext expression to a ciphertext expression.
@@ -283,7 +283,7 @@ type family Cyc2CT (m'map :: [(Factored, Factored)]) zqs e = cte | cte -> e wher
   Cyc2CT m'map zqs c = Tagged c
     (TypeError ('Text "Type family 'Cyc2CT' can't convert type '"
                 ':<>: 'ShowType c ':<>: 'Text "'."
-                ':$$: 'Text "It only converts types of the form 'PNoise h (Cyc t m zp) and pairs/lists/functions thereof."))
+                ':$$: 'Text "It only converts types of the form 'PNoiseCyc h t m zp' and pairs/lists/functions thereof."))
 
 
 -- type-level map lookup
