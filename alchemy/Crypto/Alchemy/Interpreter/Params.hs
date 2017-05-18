@@ -56,7 +56,7 @@ instance (Show (ArgType zq)) => Add (Params expr) (CT m zp (Cyc t m' zq)) where
   add_ = showCT @zq "add"
   neg_ = showCT @zq "neg"
 
-instance (SingI (h :: Nat)) => Add (Params expr) (PNoise h a) where
+instance (SingI (h :: Nat)) => Add (Params expr) (PNoiseCyc h t m r) where
   add_ = showPNoise @h "add"
   neg_ = showPNoise @h "neg"
 {-
@@ -67,8 +67,8 @@ instance (Show (ArgType zq)) => Mul (Params expr) (CT m zp (Cyc t m' zq)) where
   type PreMul (Params expr) (CT m zp (Cyc t m' zq)) = (CT m zp (Cyc t m' zq))
   mul_ = showCT @zq "mul"
 
-instance (SingI (h :: Nat)) => Mul (Params expr) (PNoise h a) where
-  type PreMul (Params expr) (PNoise h a) = PreMul expr (PNoise h a)
+instance (SingI (h :: Nat)) => Mul (Params expr) (PNoiseCyc h t m r) where
+  type PreMul (Params expr) (PNoiseCyc h t m r) = PreMul expr (PNoiseCyc h t m r)
   mul_ = showPNoise @h "mul"
 {-
 instance Show a => MulLit P a where
@@ -126,13 +126,11 @@ instance SHE (Params expr) where
        -> Params expr env (CT r zp (Cyc t r' zq) -> CT s zp (Cyc t s' zq))
   tunnel_ _ = showCT @zq "tunnel"
 
-instance (SingI (h :: Nat)) => LinearCyc (Params expr) (PNoise h) where
-  type PreLinearCyc (Params expr) (PNoise h) = PreLinearCyc expr (PNoise h)
-  type LinearCycCtx (Params expr) (PNoise h) t e r s zp = ()
+instance (SingI (h :: Nat)) => LinearCyc (Params expr) (Linear t) (PNoiseCyc h t) where
+  type PreLinearCyc (Params expr) (PNoiseCyc h t) =
+    PreLinearCyc expr (PNoiseCyc h t)
+  type LinearCycCtx (Params expr) (Linear t) (PNoiseCyc h t) e r s zp = ()
 
-  linearCyc_ :: forall t e r s zp env . (LinearCycCtx (Params expr) (PNoise h) t e r s zp)
-    => Linear t zp e r s
-    -> Params expr env ((PreLinearCyc (Params expr) (PNoise h)) (Cyc t r zp) -> PNoise h (Cyc t s zp))
   linearCyc_ _ = showPNoise @h "linear"
 {-
 instance ErrorRate P where
