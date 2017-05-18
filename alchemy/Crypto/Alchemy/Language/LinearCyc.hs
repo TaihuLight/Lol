@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE PolyKinds              #-}
 {-# LANGUAGE TypeFamilies           #-}
@@ -12,7 +13,7 @@ import GHC.Exts                       (Constraint)
 
 -- | Symantics for evaluating a linear function on cyclotomics.
 
-class LinearCyc expr linrep cycrep where
+class LinearCyc expr linrep cycrep | cycrep -> linrep where
 
   -- | Constraints needed to linear
   type LinearCycCtx expr linrep cycrep
