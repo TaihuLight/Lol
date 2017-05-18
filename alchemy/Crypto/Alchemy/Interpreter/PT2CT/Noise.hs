@@ -10,6 +10,7 @@
 {-# LANGUAGE PolyKinds                  #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeFamilies               #-}
@@ -20,34 +21,32 @@
 
 -- should be a hidden/internal module
 module Crypto.Alchemy.Interpreter.PT2CT.Noise
-(PNoise(..), PNoise2Zq
-,TotalNoiseUnits, MaxComponentPNoise
-,TLNatNat, mkTLNatNat) where
+( PNoiseCyc(..), PNoise2Zq
+, TotalNoiseUnits, MaxComponentPNoise
+, TLNatNat, mkTLNatNat)
+where
 
-import           Algebra.Additive          as Additive (C)
-import           Algebra.Ring              as Ring (C)
+import           Algebra.Additive             as Additive (C)
+import           Algebra.Ring                 as Ring (C)
 import           Data.Functor.Trans.Tagged
-import           Data.Singletons.Prelude   hiding ((:<))
-import           Data.Singletons.Prelude.List (Sum, Maximum)
-import           Data.Singletons.TH        hiding ((:<))
+import           Data.Singletons.Prelude      hiding ((:<))
+import           Data.Singletons.Prelude.List (Maximum, Sum)
+import           Data.Singletons.TH           hiding ((:<))
 import           Data.Type.Natural
-import qualified GHC.TypeLits              as TL (Nat)
-import           GHC.TypeLits              hiding (Nat)
+import           GHC.TypeLits                 hiding (Nat)
+import qualified GHC.TypeLits                 as TL (Nat)
 import           Language.Haskell.TH
 
+import Crypto.Lol                      (Cyc)
 import Crypto.Lol.Reflects
 import Crypto.Lol.Types.Unsafe.ZqBasic
 
--- | A value tagged by @pNoise =~ -log(noise rate)@.
-newtype PNoise (h :: Nat) a = PN {unPN :: a}
-  -- EAC: Okay to derive Functor and Applicative? It makes life easier because
-  -- we can define a single instance (e.g., of E) rather than one for Identity
-  -- and one for (PNoise h)
-  deriving (Additive.C, Ring.C, Functor, Show)
+-- | A value tagged by @pNoise =~ -log_b(noise rate)@.
+newtype PNoiseCyc (h :: Nat) t m r = PNC { unPNC :: Cyc t m r }
 
-instance Applicative (PNoise h) where
-  pure = PN
-  (PN f) <*> (PN a) = PN $ f a
+deriving instance (Additive.C (Cyc t m r)) => Additive.C (PNoiseCyc h t m r)
+deriving instance (Ring.C     (Cyc t m r)) => Ring.C     (PNoiseCyc h t m r)
+deriving instance (Show       (Cyc t m r)) => Show       (PNoiseCyc h t m r)
 
 -- CJP: why should this be defined here?
 type family Modulus zq :: k
