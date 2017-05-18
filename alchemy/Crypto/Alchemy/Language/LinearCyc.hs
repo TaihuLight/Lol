@@ -23,12 +23,12 @@ class LinearCyc expr linrep cycrep where
 
   -- | An object-language expression representing the given linear function.
   linearCyc_ :: (LinearCycCtx expr linrep cycrep e r s zp)
-    => linrep e r s zp
+    => linrep zp e r s          -- weird order, also in Linear: change?
     -> expr env (PreLinearCyc expr cycrep r zp -> cycrep s zp)
 
 linearCyc :: (LinearCyc expr linrep cycrep,
               LinearCycCtx expr linrep cycrep e r s zp, Lambda expr)
-  => linrep e r s zp
+  => linrep zp e r s
   -> expr env (PreLinearCyc expr cycrep r zp)
   -> expr env (cycrep s zp)
 linearCyc f a = linearCyc_ f $: a
