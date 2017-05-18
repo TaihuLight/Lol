@@ -26,10 +26,10 @@ import Algebra.Ring     as Ring
 import Crypto.Alchemy.Interpreter.PT2CT.Noise
 import Crypto.Alchemy.Language.Arithmetic
 import Crypto.Alchemy.Language.Lambda
+import Crypto.Alchemy.Language.LinearCyc
 import Crypto.Alchemy.Language.List
 import Crypto.Alchemy.Language.Monad
 import Crypto.Alchemy.Language.SHE
-import Crypto.Alchemy.Language.LinearCyc
 
 import Crypto.Lol
 import Crypto.Lol.Applications.SymmSHE as SHE
@@ -70,6 +70,7 @@ instance Ring.C a => MulLit E a where
 instance (RescaleCyc (Cyc t) (ZqBasic ('PP '(Prime2, 'S k)) i) (ZqBasic ('PP '(Prime2, k)) i),
           Fact m)
   => Div2 E (Cyc t m (ZqBasic ('PP '(Prime2, k)) i)) where
+
   type PreDiv2 E (Cyc t m (ZqBasic ('PP '(Prime2, k)) i)) =
     Cyc t m (ZqBasic ('PP '(Prime2, 'S k)) i)
   -- since input is divisible by two, it doesn't matter which basis we use
@@ -77,22 +78,17 @@ instance (RescaleCyc (Cyc t) (ZqBasic ('PP '(Prime2, 'S k)) i) (ZqBasic ('PP '(P
 
 instance (RescaleCyc (Cyc t) (ZqBasic ('PP '(Prime2, 'S k)) i) (ZqBasic ('PP '(Prime2, k)) i),
           Fact m)
-  => Div2 E (PNoise h (Cyc t m (ZqBasic ('PP '(Prime2, k)) i))) where
-  type PreDiv2 E (PNoise h (Cyc t m (ZqBasic ('PP '(Prime2, k)) i))) =
-    PNoise h (Cyc t m (ZqBasic ('PP '(Prime2, 'S k)) i))
-  -- since input is divisible by two, it doesn't matter which basis we use
-  div2_ = pureE $ PN . rescalePow . unPN
+  => Div2 E (PNoiseCyc h t m (ZqBasic ('PP '(Prime2, k)) i)) where
 
-instance (RescaleCyc (Cyc t) (ZqBasic ('PP '(Prime2, 'S k)) i) (ZqBasic ('PP '(Prime2, k)) i),
-          Fact m)
-  => Div2 E (Identity (Cyc t m (ZqBasic ('PP '(Prime2, k)) i))) where
-  type PreDiv2 E (Identity (Cyc t m (ZqBasic ('PP '(Prime2, k)) i))) =
-    Identity (Cyc t m (ZqBasic ('PP '(Prime2, 'S k)) i))
+  type PreDiv2 E (PNoiseCyc h t m (ZqBasic ('PP '(Prime2, k)) i)) =
+    PNoiseCyc h t m (ZqBasic ('PP '(Prime2, 'S k)) i)
+
   -- since input is divisible by two, it doesn't matter which basis we use
-  div2_ = pureE $ Identity . rescalePow . runIdentity
+  div2_ = pureE $ PNC . rescalePow . unPNC
 
 instance (SHE.ModSwitchPTCtx t m' (ZqBasic ('PP '(Prime2, 'S k)) i) (ZqBasic ('PP '(Prime2, k)) i) zq) =>
   Div2 E (CT m (ZqBasic ('PP '(Prime2, k)) i) (Cyc t m' zq)) where
+
   type PreDiv2 E (CT m (ZqBasic ('PP '(Prime2, k)) i) (Cyc t m' zq)) =
     CT m (ZqBasic ('PP '(Prime2, 'S k)) i) (Cyc t m' zq)
 
@@ -136,11 +132,12 @@ instance SHE E where
   keySwitchQuad_   = pureE . keySwitchQuadCirc
   tunnel_          = pureE . SHE.tunnel
 
-instance (Applicative rep) => LinearCyc E rep where
-  type PreLinearCyc E rep = rep
-  type LinearCycCtx E rep t e r s zp = (e `Divides` r, e `Divides` s, CElt t zp)
+instance LinearCyc E (Linear t) (Cyc t) where
+  type PreLinearCyc E (Cyc t) = Cyc t
+  type LinearCycCtx E (Linear t) (Cyc t) e r s zp =
+    (e `Divides` r, e `Divides` s, CElt t zp)
 
-  linearCyc_ f = pureE $ fmap (evalLin f)
+  linearCyc_ f = pureE $ evalLin f
 
 -- | Uses 'SHE.errorTermUnrestricted' to compute 'errorRate'.
 instance ErrorRate E where
