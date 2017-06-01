@@ -33,9 +33,8 @@ import SHERepaMain ()
 import RLWEChallengesMain ()
 
 import qualified Arithmetic ()
---import qualified HomomRLWR ()
---import qualified Tunnel ()
---import NoiseExperiment ()
+import qualified HomomRLWR ()
+import qualified Tunnel ()
 
 --main :: IO ()
 --main = NoiseExperiment.main
