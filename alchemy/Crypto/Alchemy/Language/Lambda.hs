@@ -1,16 +1,15 @@
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE TypeFamilies           #-}
-{-# LANGUAGE TypeFamilyDependencies #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 module Crypto.Alchemy.Language.Lambda where
 
 -- | Symantics for functions and application.
 
 class Lambda expr where
-  -- | Type representing an object-language function from @a@ to @b@.
-  type Arrow expr a b = arr | arr -> a b
+  -- | Representation of an object-language function from @a@ to @b@.
+  data Arrow expr a b
 
   -- | Lambda abstraction.
   lam :: expr (e,a) b -> expr e (Arrow expr a b)
@@ -29,14 +28,19 @@ class Lambda expr where
 let_ :: Lambda expr => expr e a -> expr (e,a) b -> expr e b
 let_ a f = lam f $: a
 
--- | Composition.
+-- | Object-language function composition.
+comp_ :: Lambda expr =>
+  expr e (Arrow expr (Arrow expr b c)
+          (Arrow expr (Arrow expr a b) (Arrow expr a c)))
+comp_ = lam $ lam $ lam $ v2 $: (v1 $: v0)
+
 infixr 9 .:
+-- | Convenient metalanguage version of '(.:)'.
 (.:) :: (Lambda expr) =>
         expr e (Arrow expr b c)
      -> expr e (Arrow expr a b)
      -> expr e (Arrow expr a c)
-f .: g = lam (s f $: (s g $: v0))
-
+f .: g = comp_ $: f $: g
 
 -- CJP: for some reason have to give signature here, even though ghci
 -- infers them correctly
