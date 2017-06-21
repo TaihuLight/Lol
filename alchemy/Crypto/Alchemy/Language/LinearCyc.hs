@@ -12,7 +12,7 @@ import GHC.Exts                       (Constraint)
 
 -- | Symantics for evaluating a linear function on cyclotomics.
 
-class LinearCyc expr rep where
+class Lambda expr => LinearCyc expr rep where
 
   -- | Constraints needed to linear
   type LinearCycCtx
@@ -30,9 +30,9 @@ class LinearCyc expr rep where
   -- | An object-language expression representing the given linear function.
   linearCyc_ :: (LinearCycCtx expr rep t e r s zp)
     => Linear t zp e r s
-    -> expr env ((PreLinearCyc expr rep) (Cyc t r zp) -> rep (Cyc t s zp))
+    -> expr env (Arrow expr ((PreLinearCyc expr rep) (Cyc t r zp)) (rep (Cyc t s zp)))
 
-linearCyc :: (LinearCyc expr rep, LinearCycCtx expr rep t e r s zp, Lambda expr)
+linearCyc :: (LinearCyc expr rep, LinearCycCtx expr rep t e r s zp)
   => Linear t zp e r s
   -> expr env ((PreLinearCyc expr rep) (Cyc t r zp))
   -> expr env (rep (Cyc t s zp))
