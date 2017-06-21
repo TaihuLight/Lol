@@ -1,5 +1,7 @@
 
 module Crypto.Alchemy.Language.Pair where
 
-class Pair expr where
-  pair_ :: expr e (a -> b -> (a,b))
+import Crypto.Alchemy.Language.Lambda
+
+class Lambda expr => Pair expr where
+  pair_ :: expr e (Arrow expr a (Arrow expr b (a,b)))
