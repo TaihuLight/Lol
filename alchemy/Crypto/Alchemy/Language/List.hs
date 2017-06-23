@@ -8,7 +8,7 @@ class List expr where
   nil_  :: expr e [a]
 
   -- | List constructor (analogue of ':').
-  cons_ :: expr e (a -> [a] -> [a])
+  cons_ :: expr e a -> expr e [a] -> expr e [a]
 
 {- CJP: Keeping these out for now.  They aren't useful until we have a
 way to compare against nil, and have conditionals in the language.
