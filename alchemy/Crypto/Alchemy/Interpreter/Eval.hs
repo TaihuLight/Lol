@@ -18,6 +18,7 @@ import Control.Applicative
 import Control.Monad.Identity
 import Control.Monad.Reader
 import Control.Monad.Writer
+import Data.Coerce
 import Data.Tuple
 
 import Algebra.Additive as Additive
@@ -33,13 +34,13 @@ import Crypto.Alchemy.Language.Pair
 import Crypto.Alchemy.Language.SHE
 import Crypto.Alchemy.Language.String
 
-import Crypto.Lol hiding (String)
+import Crypto.Lol                      hiding (String)
 import Crypto.Lol.Applications.SymmSHE as SHE
 import Crypto.Lol.Types
 
 -- | Metacircular evaluator.
 newtype E e a = E { unE :: e -> a }
-  deriving (Functor)            -- not Applicative; don't want 'pure'!
+  deriving (Functor, Applicative)
 
 -- | Evaluate a closed expression (i.e., one not having any unbound
 -- variables)
@@ -47,27 +48,25 @@ eval :: E () a -> a
 eval = flip unE ()
 
 instance Lambda E where
-  lam f  = E $ curry $ unE f
-  f $: a = E $ unE f <*> unE a
+  newtype Arrow E a b = AE (a -> b) deriving (Functor, Applicative, Monad)
+  lam f  = coerce $ curry $ unE f
+  f $: a = coerce f <*> a
   v0     = E snd
   s a    = E $ unE a . fst
 
-pureE :: a -> E e a
-pureE = E . pure
-
 instance Additive.C a => Add E a where
-  add_ = pureE (+)
-  neg_ = pureE negate
+  (+:) = liftA2 (+)
+  neg_ = liftA  negate
 
 instance Additive.C a => AddLit E a where
-  addLit_ x = pureE (x +)
+  (>+:) x = liftA (x +)
 
 instance Ring.C a => Mul E a where
   type PreMul E a = a
-  mul_ = pureE (*)
+  (*:) = liftA2 (*)
 
 instance Ring.C a => MulLit E a where
-  mulLit_ x = pureE (x *)
+  (>*:) x = liftA (x *)
 
 instance (RescaleCyc (Cyc t) (ZqBasic ('PP '(Prime2, 'S k)) i) (ZqBasic ('PP '(Prime2, k)) i),
           Fact m)
@@ -75,7 +74,7 @@ instance (RescaleCyc (Cyc t) (ZqBasic ('PP '(Prime2, 'S k)) i) (ZqBasic ('PP '(P
   type PreDiv2 E (Cyc t m (ZqBasic ('PP '(Prime2, k)) i)) =
     Cyc t m (ZqBasic ('PP '(Prime2, 'S k)) i)
   -- since input is divisible by two, it doesn't matter which basis we use
-  div2_ = pureE rescalePow
+  div2_ = liftA rescalePow
 
 instance (RescaleCyc (Cyc t) (ZqBasic ('PP '(Prime2, 'S k)) i) (ZqBasic ('PP '(Prime2, k)) i),
           Fact m)
@@ -83,7 +82,7 @@ instance (RescaleCyc (Cyc t) (ZqBasic ('PP '(Prime2, 'S k)) i) (ZqBasic ('PP '(P
   type PreDiv2 E (PNoiseTag h (Cyc t m (ZqBasic ('PP '(Prime2, k)) i))) =
     PNoiseTag h (Cyc t m (ZqBasic ('PP '(Prime2, 'S k)) i))
   -- since input is divisible by two, it doesn't matter which basis we use
-  div2_ = pureE $ PTag . rescalePow . unPTag
+  div2_ = liftA $ PTag . rescalePow . unPTag
 
 instance (RescaleCyc (Cyc t) (ZqBasic ('PP '(Prime2, 'S k)) i) (ZqBasic ('PP '(Prime2, k)) i),
           Fact m)
@@ -91,36 +90,36 @@ instance (RescaleCyc (Cyc t) (ZqBasic ('PP '(Prime2, 'S k)) i) (ZqBasic ('PP '(P
   type PreDiv2 E (Identity (Cyc t m (ZqBasic ('PP '(Prime2, k)) i))) =
     Identity (Cyc t m (ZqBasic ('PP '(Prime2, 'S k)) i))
   -- since input is divisible by two, it doesn't matter which basis we use
-  div2_ = pureE $ Identity . rescalePow . runIdentity
+  div2_ = liftA $ Identity . rescalePow . runIdentity
 
 instance (SHE.ModSwitchPTCtx t m' (ZqBasic ('PP '(Prime2, 'S k)) i) (ZqBasic ('PP '(Prime2, k)) i) zq) =>
   Div2 E (CT m (ZqBasic ('PP '(Prime2, k)) i) (Cyc t m' zq)) where
   type PreDiv2 E (CT m (ZqBasic ('PP '(Prime2, k)) i) (Cyc t m' zq)) =
     CT m (ZqBasic ('PP '(Prime2, 'S k)) i) (Cyc t m' zq)
 
-  div2_ = pureE modSwitchPT
+  div2_ = liftA modSwitchPT
 
 instance List E where
-  nil_  = pureE []
-  cons_ = pureE (:)
+  nil_  = pure []
+  cons_ = liftA2 (:)
 
 instance Functor_ E where
-  fmap_ = pureE fmap
+  fmap_ = liftA2 fmap . coerce
 
 instance Applicative_ E where
-  pure_ = pureE pure
-  ap_   = pureE (<*>)
+  pure_ = liftA pure
+  (<*:>)  = liftA2 (<*>) . fmap (fmap coerce)
 
 instance Monad_ E where
-  bind_ = pureE (>>=)
+  (>>=:) = flip $ liftA2 (=<<) . coerce
 
 instance MonadReader_ E where
-  ask_   = pureE ask
-  local_ = pureE local
+  ask_   = pure ask
+  local_ = liftA2 local . coerce
 
 instance MonadWriter_ E where
-  tell_   = pureE tell
-  listen_ = pureE listen
+  tell_   = liftA tell
+  listen_ = liftA listen
 
 instance SHE E where
 
@@ -131,18 +130,18 @@ instance SHE E where
   type KeySwitchQuadCtx E (CT m zp (Cyc t m' zq)) gad = (SHE.KeySwitchCtx gad t m' zp zq)
   type TunnelCtx        E t e r s e' r' s' zp zq gad  = (SHE.TunnelCtx t r s e' r' s' zp zq gad)
 
-  modSwitchPT_     = pureE   modSwitchPT
-  modSwitch_       = pureE   modSwitch
-  addPublic_       = pureE . addPublic
-  mulPublic_       = pureE . mulPublic
-  keySwitchQuad_   = pureE . keySwitchQuadCirc
-  tunnel_          = pureE . SHE.tunnel
+  modSwitchPT_     = liftA   modSwitchPT
+  modSwitch_       = liftA   modSwitch
+  addPublic_       = liftA . addPublic
+  mulPublic_       = liftA . mulPublic
+  keySwitchQuad_   = liftA . keySwitchQuadCirc
+  tunnel_          = liftA . SHE.tunnel
 
 instance (Applicative rep) => LinearCyc E rep where
   type PreLinearCyc E rep = rep
   type LinearCycCtx E rep t e r s zp = (e `Divides` r, e `Divides` s, CElt t zp)
 
-  linearCyc_ f = pureE $ fmap (evalLin f)
+  linearCyc_ f = liftA $ fmap (evalLin f)
 
 -- | Uses 'SHE.errorTermUnrestricted' to compute 'errorRate'.
 instance ErrorRate E where
@@ -151,13 +150,13 @@ instance ErrorRate E where
 
   errorRate_ :: forall t m' m z zp zq ct e .
                 (ErrorRateCtx E ct z, ct ~ CT m zp (Cyc t m' zq)) =>
-                SHE.SK (Cyc t m' z) -> E e (ct -> Double)
-  errorRate_ sk = pureE $
+                SHE.SK (Cyc t m' z) -> E e ct -> E e Double
+  errorRate_ sk = liftA $
     (/ (fromIntegral $ proxy modulus (Proxy::Proxy zq))) .
     fromIntegral . maximum . fmap abs . SHE.errorTermUnrestricted sk
 
 instance String E where
-  string_ str = E $ const str
+  string_ = pure
 
 instance Pair E where
-  pair_ = E $ const (,)
+  pair_ = liftA2 (,)
