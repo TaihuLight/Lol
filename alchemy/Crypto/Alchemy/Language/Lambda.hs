@@ -1,18 +1,21 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 module Crypto.Alchemy.Language.Lambda where
 
 -- | Symantics for functions and application.
 
 class Lambda expr where
+  data Arrow expr a b
+
   -- | Lambda abstraction.
-  lam :: expr (e,a) b -> expr e (a -> b)
+  lam :: expr (e,a) b -> expr e (Arrow expr a b)
 
   -- | Application.
   infixl 1 $:             -- ($) is infixr, but l is nicer for obj lang
-  ($:) :: expr e (a -> b) -> expr e a -> expr e b
+  ($:) :: expr e (Arrow expr a b) -> expr e a -> expr e b
 
   -- | The zero'th (most-recently bound) variable.
   v0 :: expr (b,a) a
@@ -26,9 +29,11 @@ let_ a f = lam f $: a
 
 -- | Composition.
 infixr 9 .:
-(.:) :: (Lambda expr) => expr e (b -> c) -> expr e (a -> b) -> expr e (a -> c)
+(.:) :: (Lambda expr) =>
+  expr e (Arrow expr b c) ->
+  expr e (Arrow expr a b) ->
+  expr e (Arrow expr a c)
 f .: g = lam (s f $: (s g $: v0))
-
 
 -- CJP: for some reason have to give signature here, even though ghci
 -- infers them correctly
