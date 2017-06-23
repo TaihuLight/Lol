@@ -70,7 +70,7 @@ class (Monad_ expr) => MonadReader_ expr where
 
   -- | Object-language analogue of 'local'.
   local_ :: (MonadReader r m) => 
-    expr e (Arrow expr r r) -> expr e (m a) -> expe e (m a)
+    expr e (Arrow expr r r) -> expr e (m a) -> expr e (m a)
 
 -- | Symantics for writer monads: promotes any 'MonadWriter' to the
 -- object language.
