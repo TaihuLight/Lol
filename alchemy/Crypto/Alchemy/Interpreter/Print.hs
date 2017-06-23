@@ -39,6 +39,7 @@ pureP = P . const
 -- implementation is simpler that way.
 
 instance Lambda P where
+  data Arrow P a b = AP         -- doesn't matter, so unit type
   lam f  = P $ \i -> "(\\v" ++ show  i ++ " -> " ++ unP f (i+1) ++ ")"
   f $: a = P $ \i -> "("    ++ unP f i ++ " "    ++ unP a i     ++ ")"
   v0     = P $ \i -> "v" ++ show (i-1)
